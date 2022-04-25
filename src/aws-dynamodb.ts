@@ -81,7 +81,7 @@ export async function incrementUserGuildActivities(
 }
 
 const calculateActivityScore = (messageCount: number, replyCount: number, reactionCount: number) => {
-  return messageCount * 3 + reactionCount * 2 + reactionCount;
+  return messageCount * 3 + replyCount * 2 + reactionCount;
 };
 
 export interface UserGuildActivityEntry {
