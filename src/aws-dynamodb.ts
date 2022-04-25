@@ -43,7 +43,15 @@ export async function incrementUserGuildActivities(
     try {
       await dynamoDbSingleton.put({
         TableName: process.env.AWS_DYNAMODB_TABLE_NAME!,
-        Item: { id: v4(), userId, guildId, messageCount: messageIncrement, replyCount: replyIncrement, reactionCount: reactionIncrement } as UserGuildActivityEntry,
+        Item: {
+          id: v4(),
+          userId,
+          guildId,
+          messageCount: messageIncrement,
+          replyCount: replyIncrement,
+          reactionCount: reactionIncrement,
+          activityScore: calculateActivityScore(messageIncrement, replyIncrement, reactionIncrement),
+        } as UserGuildActivityEntry,
       }).promise();
       console.log(`inserted new entry: userId=${userId} and guildId=${guildId}`);
     } catch(err: any) {
@@ -57,6 +65,7 @@ export async function incrementUserGuildActivities(
     entry.messageCount += messageIncrement;
     entry.replyCount += replyIncrement;
     entry.reactionCount += reactionIncrement;
+    entry.activityScore = calculateActivityScore(entry.messageCount, entry.replyCount, entry.reactionCount);
 
     try {
       await dynamoDbSingleton.put({
@@ -71,6 +80,10 @@ export async function incrementUserGuildActivities(
   }
 }
 
+const calculateActivityScore = (messageCount: number, replyCount: number, reactionCount: number) => {
+  return messageCount * 3 + reactionCount * 2 + reactionCount;
+};
+
 export interface UserGuildActivityEntry {
   id: string;
   userId: string;
@@ -78,4 +91,5 @@ export interface UserGuildActivityEntry {
   messageCount: number;
   replyCount: number;
   reactionCount: number;
+  activityScore: number;
 }
