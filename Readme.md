@@ -1,0 +1,2 @@
+#Itheum Discord Data Aggregator Demo
+This bot will listen to incoming messages, replies and reactions of users from guilds where the bot has joined too. This bot only stores the counts of the mentioned events on a database. To add this bot to a guild open this link as a guild admin: https://discord.com/api/oauth2/authorize?client_id=956226883580743681&permissions=66560&scope=bot
