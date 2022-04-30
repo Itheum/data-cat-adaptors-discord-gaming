@@ -16,6 +16,112 @@ function getDynamoDbSingleton(): AWS.DynamoDB.DocumentClient {
   return dynamoDb;
 }
 
+export async function getAllExcludedUserGuild(guildId: string): Promise<ExcludedUserGuild[]> {
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  const existingEntry = await dynamoDbSingleton.scan({
+    TableName: process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME!,
+  }).promise()
+    .catch((err: any) => {
+      console.error(`error while scanning all entries for guildId ${guildId} in table ${process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME}`, err);
+      throw err;
+    });
+
+  if (existingEntry && existingEntry.Items) {
+    return existingEntry.Items as ExcludedUserGuild[];
+  }
+  return [];
+}
+
+export async function getExcludedUserGuild(userId: string, guildId: string): Promise<ExcludedUserGuild> {
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  const existingEntry = await dynamoDbSingleton.scan({
+    TableName: process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME!,
+    FilterExpression: 'userId = :userId and guildId = :guildId',
+    ExpressionAttributeValues: {
+      ':userId': userId,
+      ':guildId': guildId
+    }
+  }).promise()
+    .catch((err: any) => {
+      console.error(`error while scanning for userId ${userId} and guildId ${guildId} in table ${process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME}`, err);
+      throw err;
+    });
+
+  if (existingEntry && existingEntry.Count && existingEntry.Items && existingEntry.Count === 1 ) {
+    return existingEntry.Items[0] as ExcludedUserGuild;
+  }
+  throw new Error(`no entry found for userId ${userId} and guildId ${guildId}`);
+}
+
+export async function excludeUserGuild(userId: string, guildId: string): Promise<void> {
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  try {
+    await getExcludedUserGuild(userId, guildId);
+    console.log(`userId=${userId} and guildId=${guildId} already excluded`);
+    return;
+  } catch (err: any) {
+    // user doesn't exist, continue
+  }
+
+  try {
+    await dynamoDbSingleton.put({
+      TableName: process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME!,
+      Item: {
+        id: v4(),
+        userId,
+        guildId,
+        date: new Date().toISOString(),
+      } as ExcludedUserGuild,
+    }).promise();
+    console.log(`excluded userId=${userId} and guildId=${guildId}`);
+  } catch(err: any) {
+    console.error(`error while saving new user exclusion for userId ${userId} and guildId ${guildId}`, err);
+    throw err;
+  }
+}
+
+export async function includeUserGuild(userId: string, guildId: string): Promise<void> {
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  try {
+    const existingEntry = await getExcludedUserGuild(userId, guildId);
+
+    await dynamoDbSingleton.delete({
+      TableName: process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME!,
+      Key: {
+        id: existingEntry.id,
+      },
+    }).promise();
+    console.log(`included userId=${userId} and guildId=${guildId}`);
+  } catch(err: any) {
+    console.error(`error while deleting user exclusion for userId ${userId} and guildId ${guildId}`, err);
+    throw err;
+  }
+}
+
+export async function getNMostActiveUsers(n = 1, guildId: string): Promise<UserGuildActivityEntry[]> {
+  // todo implement
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  const existingEntry = await dynamoDbSingleton.scan({
+    TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
+    FilterExpression: 'guildId = :guildId',
+    ExpressionAttributeValues: {
+      ':guildId': guildId
+    },
+    IndexName: 'activityScore',
+    Limit: n,
+  }).promise()
+    .catch((err: any) => {
+      console.error(`error while scanning for most ${n} active users`, err);
+      throw err;
+    });
+  return [];
+}
+
 export async function incrementUserGuildActivities(
   userId: string,
   guildId: string,
@@ -26,7 +132,7 @@ export async function incrementUserGuildActivities(
   const dynamoDbSingleton = getDynamoDbSingleton();
 
   const existingEntry = await dynamoDbSingleton.scan({
-    TableName: process.env.AWS_DYNAMODB_TABLE_NAME!,
+    TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
     FilterExpression: 'userId = :userId and guildId = :guildId',
     ExpressionAttributeValues: {
       ':userId': userId,
@@ -34,7 +140,7 @@ export async function incrementUserGuildActivities(
     }
   }).promise()
     .catch((err: any) => {
-      console.error(`error while scanning for userId ${userId} and guildId ${guildId}`, err);
+      console.error(`error while scanning for userId ${userId} and guildId ${guildId} in table ${process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME}`, err);
       throw err;
     });
 
@@ -42,7 +148,7 @@ export async function incrementUserGuildActivities(
     // add new
     try {
       await dynamoDbSingleton.put({
-        TableName: process.env.AWS_DYNAMODB_TABLE_NAME!,
+        TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
         Item: {
           id: v4(),
           userId,
@@ -69,7 +175,7 @@ export async function incrementUserGuildActivities(
 
     try {
       await dynamoDbSingleton.put({
-        TableName: process.env.AWS_DYNAMODB_TABLE_NAME!,
+        TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
         Item: entry,
       }).promise();
       console.log(`updated existing entry: userId=${userId} and guildId=${guildId}`);
@@ -92,4 +198,11 @@ export interface UserGuildActivityEntry {
   replyCount: number;
   reactionCount: number;
   activityScore: number;
+}
+
+export interface ExcludedUserGuild {
+  id: string;
+  userId: string;
+  guildId: string;
+  date: string;
 }
