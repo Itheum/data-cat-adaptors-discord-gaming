@@ -16,7 +16,7 @@ function getDynamoDbSingleton(): AWS.DynamoDB.DocumentClient {
   return dynamoDb;
 }
 
-export async function getAllExcludedUserGuild(guildId: string): Promise<ExcludedUserGuild[]> {
+export async function getAllExcludedUserGuild(guildId: string): Promise<ExcludedUserGuildEntry[]> {
   const dynamoDbSingleton = getDynamoDbSingleton();
 
   const existingEntry = await dynamoDbSingleton.scan({
@@ -28,12 +28,12 @@ export async function getAllExcludedUserGuild(guildId: string): Promise<Excluded
     });
 
   if (existingEntry && existingEntry.Items) {
-    return existingEntry.Items as ExcludedUserGuild[];
+    return existingEntry.Items as ExcludedUserGuildEntry[];
   }
   return [];
 }
 
-export async function getExcludedUserGuild(userId: string, guildId: string): Promise<ExcludedUserGuild> {
+export async function getExcludedUserGuild(userId: string, guildId: string): Promise<ExcludedUserGuildEntry> {
   const dynamoDbSingleton = getDynamoDbSingleton();
 
   const existingEntry = await dynamoDbSingleton.scan({
@@ -50,7 +50,7 @@ export async function getExcludedUserGuild(userId: string, guildId: string): Pro
     });
 
   if (existingEntry && existingEntry.Count && existingEntry.Items && existingEntry.Count === 1 ) {
-    return existingEntry.Items[0] as ExcludedUserGuild;
+    return existingEntry.Items[0] as ExcludedUserGuildEntry;
   }
   throw new Error(`no entry found for userId ${userId} and guildId ${guildId}`);
 }
@@ -74,7 +74,7 @@ export async function excludeUserGuild(userId: string, guildId: string): Promise
         userId,
         guildId,
         date: new Date().toISOString(),
-      } as ExcludedUserGuild,
+      } as ExcludedUserGuildEntry,
     }).promise();
     console.log(`excluded userId=${userId} and guildId=${guildId}`);
   } catch(err: any) {
@@ -200,7 +200,7 @@ export interface UserGuildActivityEntry {
   activityScore: number;
 }
 
-export interface ExcludedUserGuild {
+export interface ExcludedUserGuildEntry {
   id: string;
   userId: string;
   guildId: string;

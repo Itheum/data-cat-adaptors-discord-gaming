@@ -1,6 +1,17 @@
 import dotenv from 'dotenv';
-import { Client, Message, MessageReaction, PartialUser, TextChannel, User } from "discord.js";
+import {
+  Client,
+  Intents,
+  Message,
+  MessageReaction,
+  PartialUser,
+  TextChannel,
+  User,
+  Interaction,
+  PartialMessageReaction
+} from "discord.js";
 import { REST } from "@discordjs/rest";
+import { SlashCommandBuilder } from "@discordjs/builders"
 import { Routes } from "discord-api-types/v9";
 import {
   excludeUserGuild,
@@ -8,7 +19,7 @@ import {
   getExcludedUserGuild,
   getNMostActiveUsers,
   incrementUserGuildActivities,
-  getAllExcludedUserGuild,
+  getAllExcludedUserGuild, ExcludedUserGuildEntry, UserGuildActivityEntry,
 } from "./aws-dynamodb";
 
 dotenv.config();
@@ -17,22 +28,34 @@ dotenv.config();
 /* Register commands */
 
 const commands = [
-  {
-    // todo add userId argument
-    name: 'exclude',
-    description: 'Excludes user from being tracked',
-  },{
-    // todo add userId argument
-    name: 're-include',
-    description: 'Re-includes user for being tracked',
-  },{
-    name: 'list-excluded',
-    description: 'Lists excluded user from being tracked',
-  },{
-    // todo add N argument
-    name: 'get-most-n-active-user',
-    description: 'Lists most N active users',
-  },
+  (new SlashCommandBuilder()
+    .setName('exclude')
+    .setDescription('Excludes user from being tracked')
+    .addStringOption(option =>
+      option.setName('user-id')
+        .setDescription('The id of the user to be excluded')
+        .setRequired(true)))
+    .toJSON(),
+  (new SlashCommandBuilder()
+    .setName('re-include')
+    .setDescription('Re-includes user for being tracked')
+    .addStringOption(option =>
+      option.setName('user-id')
+        .setDescription('The id of the user to be ere-included')
+        .setRequired(true)))
+    .toJSON(),
+  (new SlashCommandBuilder()
+    .setName('list-excluded')
+    .setDescription('Lists excluded user from being tracked'))
+    .toJSON(),
+  (new SlashCommandBuilder()
+    .setName('get-most-n-active-user')
+    .setDescription('Lists most N active users')
+    .addNumberOption(option =>
+      option.setName('n')
+        .setDescription('The amount of active users')
+        .setRequired(true)))
+    .toJSON(),
 ];
 
 const rest = new REST({version: '9'}).setToken(process.env.DISCORD_BOT_TOKEN!);
@@ -44,6 +67,7 @@ rest.put(Routes.applicationCommands(process.env.DISCORD_CLIENT_ID!), { body: com
 
 const client = new Client({
   partials: ['MESSAGE', 'CHANNEL', 'REACTION', 'GUILD_MEMBER', 'USER'],
+  intents: [Intents.FLAGS.GUILDS]
 });
 
 client.on("ready", () => {
@@ -68,9 +92,9 @@ client.on("message", async (msg: Message) => {
   incrementUserGuildActivities(userId, guildId , messageIncrement, replyIncrement, 0);
 });
 
-client.on("messageReactionAdd", async (msgReaction: MessageReaction, user:User | PartialUser ) => {
+client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser) => {
   const userId = user.id;
-  const guildId = (msgReaction.message.channel as TextChannel)!.guild.id;
+  const guildId = (reaction.message.channel as TextChannel)!.guild.id;
 
   try {
     await getExcludedUserGuild(userId, guildId);
@@ -82,15 +106,19 @@ client.on("messageReactionAdd", async (msgReaction: MessageReaction, user:User |
   incrementUserGuildActivities(userId, guildId , 0, 0, 1);
 });
 
-client.on('interactionCreate', async (interaction: any) => {
+client.on('interactionCreate', async (interaction: Interaction) => {
   if (!interaction.isCommand()) {
     return;
   }
 
-  const guildId = ''; // todo extract guildId
+  const guildId = interaction.guildId!;
 
   if (interaction.commandName === 'exclude') {
-    const userId = ''; // todo extract userId
+    const userId = interaction.options.get('user-id')?.value as string;
+
+    if (!userId) {
+      return;
+    }
 
     try {
       await excludeUserGuild(userId, guildId);
@@ -99,7 +127,11 @@ client.on('interactionCreate', async (interaction: any) => {
       await interaction.reply('error while excluding');
     }
   } else if(interaction.commandName === 're-include') {
-    const userId = ''; // todo extract userId
+    const userId = interaction.options.get('user-id')?.value as string;
+
+    if (!userId) {
+      return;
+    }
 
     try {
       await includeUserGuild(userId, guildId);
@@ -109,19 +141,45 @@ client.on('interactionCreate', async (interaction: any) => {
     }
   } else if(interaction.commandName === 'list-excluded') {
     try {
-      await interaction.reply(await getAllExcludedUserGuild(guildId));
+      const excludedUserGuild = await getAllExcludedUserGuild(guildId);
+
+      await interaction.reply(formatExcludedUserGuild(excludedUserGuild));
     } catch (err: any) {
-      await interaction.reply('error while re-including');
+      await interaction.reply('error while listing excluded');
     }
   } else if(interaction.commandName === '') {
-    const n = 0; // todo extract N
+    const n = interaction.options.get('n')?.value as number;
+
+    if(!n) {
+      return;
+    }
+
+    const mostActiveUsers = await getNMostActiveUsers(n, guildId)
 
     try {
-      await interaction.reply(await getNMostActiveUsers(n, guildId));
+      await interaction.reply(formatMostActiveUsers(mostActiveUsers));
     } catch (err: any) {
       await interaction.reply('error while re-including');
     }
   }
 });
+
+const formatExcludedUserGuild = (excludedUserGuild: ExcludedUserGuildEntry[]) => {
+  let result = "";
+
+  for (const exclUserGuild of excludedUserGuild) {
+    result += exclUserGuild.userId + ' - ' + exclUserGuild.date + '\n';
+  }
+  return result === "" ? "no results" : result;
+};
+
+const formatMostActiveUsers = (mostActiveUsers: UserGuildActivityEntry[]) => {
+  let result = "";
+
+  for (const activeUsers of mostActiveUsers) {
+    result += activeUsers.userId + ' - ' + activeUsers.activityScore + '\n';
+  }
+  return result === "" ? "no results" : result;
+};
 
 client.login(process.env.DISCORD_BOT_TOKEN).catch(console.error);
