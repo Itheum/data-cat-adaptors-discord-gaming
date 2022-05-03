@@ -24,7 +24,7 @@ import {
 
 dotenv.config();
 
-const allowedRolesForCommandInteraction = ['Owner'];
+const allowedRolesForCommandInteraction = ['Owner', 'Data Auditors'];
 
 
 /* Register commands */
