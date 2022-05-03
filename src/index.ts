@@ -81,7 +81,6 @@ client.on("ready", () => {
 });
 
 client.on("message", async (msg: Message) => {
-  return;
   const userId = msg.author.id;
   const guildId = (msg.channel as TextChannel).guild.id;
   const isReply = msg.mentions.users.size !== 0;
@@ -100,7 +99,6 @@ client.on("message", async (msg: Message) => {
 });
 
 client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser) => {
-  return;
   const userId = user.id;
   const guildId = (reaction.message.channel as TextChannel)!.guild.id;
 
