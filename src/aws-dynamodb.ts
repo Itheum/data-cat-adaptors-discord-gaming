@@ -103,22 +103,24 @@ export async function includeUserGuild(userId: string, guildId: string): Promise
 }
 
 export async function getNMostActiveUsers(n = 1, guildId: string): Promise<UserGuildActivityEntry[]> {
-  // todo implement
   const dynamoDbSingleton = getDynamoDbSingleton();
 
-  const existingEntry = await dynamoDbSingleton.scan({
+  // todo improve: sort and limit by DB query, not by code
+  const existingEntries = await dynamoDbSingleton.scan({
     TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
     FilterExpression: 'guildId = :guildId',
     ExpressionAttributeValues: {
       ':guildId': guildId
     },
-    IndexName: 'activityScore',
-    Limit: n,
   }).promise()
     .catch((err: any) => {
       console.error(`error while scanning for most ${n} active users`, err);
       throw err;
     });
+
+  if (existingEntries && existingEntries.Items) {
+    return (existingEntries.Items as UserGuildActivityEntry[]).sort(activityScoreSort).slice(0, n);
+  }
   return [];
 }
 
@@ -189,6 +191,10 @@ export async function incrementUserGuildActivities(
 const calculateActivityScore = (messageCount: number, replyCount: number, reactionCount: number) => {
   return messageCount * 3 + replyCount * 2 + reactionCount;
 };
+
+const activityScoreSort = (a: UserGuildActivityEntry, b: UserGuildActivityEntry): number => {
+  return a.activityScore > b.activityScore ? -1 : 1;
+}
 
 export interface UserGuildActivityEntry {
   id: string;

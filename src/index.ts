@@ -24,6 +24,8 @@ import {
 
 dotenv.config();
 
+const allowedRolesForCommandInteraction = ['Owner'];
+
 
 /* Register commands */
 
@@ -34,7 +36,8 @@ const commands = [
     .addStringOption(option =>
       option.setName('user-id')
         .setDescription('The id of the user to be excluded')
-        .setRequired(true)))
+        .setRequired(true))
+    .setDefaultPermission(false))
     .toJSON(),
   (new SlashCommandBuilder()
     .setName('re-include')
@@ -42,11 +45,13 @@ const commands = [
     .addStringOption(option =>
       option.setName('user-id')
         .setDescription('The id of the user to be ere-included')
-        .setRequired(true)))
+        .setRequired(true))
+    .setDefaultPermission(false))
     .toJSON(),
   (new SlashCommandBuilder()
     .setName('list-excluded')
-    .setDescription('Lists excluded user from being tracked'))
+    .setDescription('Lists excluded user from being tracked')
+    .setDefaultPermission(false))
     .toJSON(),
   (new SlashCommandBuilder()
     .setName('get-most-n-active-user')
@@ -54,7 +59,8 @@ const commands = [
     .addNumberOption(option =>
       option.setName('n')
         .setDescription('The amount of active users')
-        .setRequired(true)))
+        .setRequired(true))
+    .setDefaultPermission(false))
     .toJSON(),
 ];
 
@@ -75,6 +81,7 @@ client.on("ready", () => {
 });
 
 client.on("message", async (msg: Message) => {
+  return;
   const userId = msg.author.id;
   const guildId = (msg.channel as TextChannel).guild.id;
   const isReply = msg.mentions.users.size !== 0;
@@ -93,6 +100,7 @@ client.on("message", async (msg: Message) => {
 });
 
 client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser) => {
+  return;
   const userId = user.id;
   const guildId = (reaction.message.channel as TextChannel)!.guild.id;
 
@@ -108,6 +116,13 @@ client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessag
 
 client.on('interactionCreate', async (interaction: Interaction) => {
   if (!interaction.isCommand()) {
+    return;
+  }
+
+  const highestUserRole = (interaction!.member!.roles as any)['highest']['name'] as string;
+
+  if (!allowedRolesForCommandInteraction.includes(highestUserRole)) {
+    await interaction.reply(`only ${allowedRolesForCommandInteraction.toString()} are allowed to perform these commands`);
     return;
   }
 
@@ -147,7 +162,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     } catch (err: any) {
       await interaction.reply('error while listing excluded');
     }
-  } else if(interaction.commandName === '') {
+  } else if(interaction.commandName === 'get-most-n-active-user') {
     const n = interaction.options.get('n')?.value as number;
 
     if(!n) {
@@ -165,21 +180,29 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 });
 
 const formatExcludedUserGuild = (excludedUserGuild: ExcludedUserGuildEntry[]) => {
-  let result = "";
+  if (!excludedUserGuild || excludedUserGuild.length === 0) {
+    return "no results";
+  }
+
+  let result = "userId - date\n";
 
   for (const exclUserGuild of excludedUserGuild) {
     result += exclUserGuild.userId + ' - ' + exclUserGuild.date + '\n';
   }
-  return result === "" ? "no results" : result;
+  return result;
 };
 
 const formatMostActiveUsers = (mostActiveUsers: UserGuildActivityEntry[]) => {
-  let result = "";
+  if (!mostActiveUsers || mostActiveUsers.length === 0) {
+    return "no results";
+  }
+
+  let result = "userId - activityScore\n";
 
   for (const activeUsers of mostActiveUsers) {
     result += activeUsers.userId + ' - ' + activeUsers.activityScore + '\n';
   }
-  return result === "" ? "no results" : result;
+  return result;
 };
 
 client.login(process.env.DISCORD_BOT_TOKEN).catch(console.error);
