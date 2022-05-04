@@ -73,14 +73,14 @@ rest.put(Routes.applicationCommands(process.env.DISCORD_CLIENT_ID!), { body: com
 
 const client = new Client({
   partials: ['MESSAGE', 'CHANNEL', 'REACTION', 'GUILD_MEMBER', 'USER'],
-  intents: [Intents.FLAGS.GUILDS]
+  intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES, Intents.FLAGS.GUILD_MESSAGE_REACTIONS]
 });
 
 client.on("ready", () => {
   console.log("Itheum bot is ready to go!");
 });
 
-client.on("message", async (msg: Message) => {
+client.on("messageCreate", async (msg: Message) => {
   const userId = msg.author.id;
   const guildId = (msg.channel as TextChannel).guild.id;
   const isReply = msg.mentions.users.size !== 0;
