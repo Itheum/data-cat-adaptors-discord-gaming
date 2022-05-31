@@ -1,6 +1,8 @@
 import AWS from "aws-sdk";
 import { v4 } from 'uuid';
 
+const ONE_HOUR_IN_S = 60 * 60;
+
 let dynamoDb: AWS.DynamoDB.DocumentClient | null = null;
 
 function getDynamoDbSingleton(): AWS.DynamoDB.DocumentClient {
@@ -124,12 +126,20 @@ export async function getNMostActiveUsers(n = 1, guildId: string): Promise<UserG
   return [];
 }
 
+export async function incrementUserGuildMentions(
+  userIds: string[],
+  guildId: string,
+): Promise<void> {
+  userIds.forEach(userId => incrementUserGuildActivities(userId, guildId, 0, 0,0, 1));
+}
+
 export async function incrementUserGuildActivities(
   userId: string,
   guildId: string,
   messageIncrement = 0,
   replyIncrement = 0,
   reactionIncrement = 0,
+  mentionedIncrement = 0,
 ): Promise<void> {
   const dynamoDbSingleton = getDynamoDbSingleton();
 
@@ -148,6 +158,14 @@ export async function incrementUserGuildActivities(
 
   if (!existingEntry || existingEntry.Count === 0) {
     // add new
+    const frequencyCounts: FrequencyCounts = {
+      veryHigh: 0,
+      high: 0,
+      middle: 0,
+      low: 0,
+    };
+    frequencyCounts[getFrequencyCountType(Date.now())] += 1;
+
     try {
       await dynamoDbSingleton.put({
         TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
@@ -158,7 +176,10 @@ export async function incrementUserGuildActivities(
           messageCount: messageIncrement,
           replyCount: replyIncrement,
           reactionCount: reactionIncrement,
-          activityScore: calculateActivityScore(messageIncrement, replyIncrement, reactionIncrement),
+          mentionedCount: mentionedIncrement,
+          frequencyCounts: frequencyCounts,
+          activityScore: calculateActivityScore(messageIncrement, replyIncrement, reactionIncrement, mentionedIncrement, frequencyCounts),
+          updatedAt: Date.now(),
         } as UserGuildActivityEntry,
       }).promise();
       console.log(`inserted new entry: userId=${userId} and guildId=${guildId}`);
@@ -170,10 +191,22 @@ export async function incrementUserGuildActivities(
     // update existing
     const entry = existingEntry.Items![0] as UserGuildActivityEntry;
 
+    if (!entry.frequencyCounts) {
+      entry.frequencyCounts = {
+        veryHigh: 0,
+        high: 0,
+        middle: 0,
+        low: 0,
+      };
+    }
+
     entry.messageCount += messageIncrement;
     entry.replyCount += replyIncrement;
     entry.reactionCount += reactionIncrement;
-    entry.activityScore = calculateActivityScore(entry.messageCount, entry.replyCount, entry.reactionCount);
+    entry.mentionedCount += mentionedIncrement;
+    entry.frequencyCounts[getFrequencyCountType(entry.updatedAt)] += 1;
+    entry.activityScore = calculateActivityScore(entry.messageCount, entry.replyCount, entry.reactionCount, entry.mentionedCount, entry.frequencyCounts);
+    entry.updatedAt = Date.now();
 
     try {
       await dynamoDbSingleton.put({
@@ -188,12 +221,46 @@ export async function incrementUserGuildActivities(
   }
 }
 
-const calculateActivityScore = (messageCount: number, replyCount: number, reactionCount: number) => {
-  return messageCount * 3 + replyCount * 2 + reactionCount;
+const calculateActivityScore = (
+  messageCount: number,
+  replyCount: number,
+  reactionCount: number,
+  mentionedCount: number,
+  frequencyCounts: FrequencyCounts,
+) => {
+  return Math.round(
+    messageCount * 3 +
+    replyCount * 2 +
+    reactionCount +
+    mentionedCount * 0.5 +
+    frequencyCounts.veryHigh +
+    frequencyCounts.high * 0.5 +
+    frequencyCounts.middle * 0.2 +
+    frequencyCounts.low * 0.05
+  );
 };
 
 const activityScoreSort = (a: UserGuildActivityEntry, b: UserGuildActivityEntry): number => {
   return a.activityScore > b.activityScore ? -1 : 1;
+}
+
+const getFrequencyCountType = (lastUpdate: number|undefined): keyof FrequencyCounts => {
+  // in case the entry has no updatedAt yet
+  if (!lastUpdate) {
+    return "veryHigh";
+  }
+
+  const timeSpan = Date.now() - lastUpdate;
+
+  if (timeSpan < 12 * ONE_HOUR_IN_S) {
+    return "veryHigh";
+  } else if (timeSpan < 24 * ONE_HOUR_IN_S) {
+    return "high";
+  } else if (timeSpan < 48 * ONE_HOUR_IN_S) {
+    return "middle"
+  } else {
+    return "low";
+  }
 }
 
 export interface UserGuildActivityEntry {
@@ -203,7 +270,17 @@ export interface UserGuildActivityEntry {
   messageCount: number;
   replyCount: number;
   reactionCount: number;
+  mentionedCount: number;
+  frequencyCounts: FrequencyCounts;
   activityScore: number;
+  updatedAt: number;
+}
+
+interface FrequencyCounts {
+  veryHigh: number,
+  high: number,
+  middle: number,
+  low: number,
 }
 
 export interface ExcludedUserGuildEntry {

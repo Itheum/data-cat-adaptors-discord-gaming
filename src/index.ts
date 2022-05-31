@@ -19,7 +19,10 @@ import {
   getExcludedUserGuild,
   getNMostActiveUsers,
   incrementUserGuildActivities,
-  getAllExcludedUserGuild, ExcludedUserGuildEntry, UserGuildActivityEntry,
+  incrementUserGuildMentions,
+  getAllExcludedUserGuild,
+  ExcludedUserGuildEntry,
+  UserGuildActivityEntry,
 } from "./aws-dynamodb";
 
 dotenv.config();
@@ -85,6 +88,12 @@ client.on("messageCreate", async (msg: Message) => {
   const guildId = (msg.channel as TextChannel).guild.id;
   const isReply = msg.mentions.users.size !== 0;
 
+  let mentionedUsers = [] as string[];
+
+  if (isReply) {
+    mentionedUsers = msg.mentions.users.map(ele => ele.id);
+  }
+
   try {
     await getExcludedUserGuild(userId, guildId);
     return;
@@ -95,6 +104,7 @@ client.on("messageCreate", async (msg: Message) => {
   const messageIncrement = isReply ? 0 : 1;
   const replyIncrement = isReply ? 1 : 0;
 
+  incrementUserGuildMentions(mentionedUsers, guildId);
   incrementUserGuildActivities(userId, guildId , messageIncrement, replyIncrement, 0);
 });
 
