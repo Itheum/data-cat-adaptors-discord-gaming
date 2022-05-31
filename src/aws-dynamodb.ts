@@ -226,6 +226,10 @@ export async function incrementUserGuildActivities(
       entry.messageLengthCounts[getMessageLengthType(messageLength)] += 1;
     }
 
+    if (!entry.mentionedCount) {
+      entry.mentionedCount = 0;
+    }
+
     entry.messageCount += messageIncrement;
     entry.replyCount += replyIncrement;
     entry.reactionCount += reactionIncrement;
