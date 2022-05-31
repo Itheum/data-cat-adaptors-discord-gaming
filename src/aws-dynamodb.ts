@@ -130,7 +130,7 @@ export async function incrementUserGuildMentions(
   userIds: string[],
   guildId: string,
 ): Promise<void> {
-  userIds.forEach(userId => incrementUserGuildActivities(userId, guildId, 0, 0,0, 1));
+  userIds.forEach(userId => incrementUserGuildActivities(userId, guildId, 0, 0,0, 1, 0));
 }
 
 export async function incrementUserGuildActivities(
@@ -140,6 +140,7 @@ export async function incrementUserGuildActivities(
   replyIncrement = 0,
   reactionIncrement = 0,
   mentionedIncrement = 0,
+  messageLength = 0,
 ): Promise<void> {
   const dynamoDbSingleton = getDynamoDbSingleton();
 
@@ -166,6 +167,17 @@ export async function incrementUserGuildActivities(
     };
     frequencyCounts[getFrequencyCountType(Date.now())] += 1;
 
+    const messageLengthCounts: MessageLengthCounts = {
+      veryShort: 0,
+      short: 0,
+      middle: 0,
+      long: 0,
+    };
+
+    if (messageLength > 0) {
+      messageLengthCounts[getMessageLengthType(messageLength)] += 1;
+    }
+
     try {
       await dynamoDbSingleton.put({
         TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
@@ -178,7 +190,8 @@ export async function incrementUserGuildActivities(
           reactionCount: reactionIncrement,
           mentionedCount: mentionedIncrement,
           frequencyCounts: frequencyCounts,
-          activityScore: calculateActivityScore(messageIncrement, replyIncrement, reactionIncrement, mentionedIncrement, frequencyCounts),
+          messageLengthCounts: messageLengthCounts,
+          activityScore: calculateActivityScore(messageIncrement, replyIncrement, reactionIncrement, mentionedIncrement, frequencyCounts, messageLengthCounts),
           updatedAt: Date.now(),
         } as UserGuildActivityEntry,
       }).promise();
@@ -200,12 +213,25 @@ export async function incrementUserGuildActivities(
       };
     }
 
+    if (!entry.messageLengthCounts) {
+      entry.messageLengthCounts = {
+        veryShort: 0,
+        short: 0,
+        middle: 0,
+        long: 0,
+      };
+    }
+
+    if (messageLength > 0) {
+      entry.messageLengthCounts[getMessageLengthType(messageLength)] += 1;
+    }
+
     entry.messageCount += messageIncrement;
     entry.replyCount += replyIncrement;
     entry.reactionCount += reactionIncrement;
     entry.mentionedCount += mentionedIncrement;
     entry.frequencyCounts[getFrequencyCountType(entry.updatedAt)] += 1;
-    entry.activityScore = calculateActivityScore(entry.messageCount, entry.replyCount, entry.reactionCount, entry.mentionedCount, entry.frequencyCounts);
+    entry.activityScore = calculateActivityScore(entry.messageCount, entry.replyCount, entry.reactionCount, entry.mentionedCount, entry.frequencyCounts, entry.messageLengthCounts);
     entry.updatedAt = Date.now();
 
     try {
@@ -227,6 +253,7 @@ const calculateActivityScore = (
   reactionCount: number,
   mentionedCount: number,
   frequencyCounts: FrequencyCounts,
+  messageLengthCounts: MessageLengthCounts,
 ) => {
   return Math.round(
     messageCount * 3 +
@@ -236,7 +263,11 @@ const calculateActivityScore = (
     frequencyCounts.veryHigh +
     frequencyCounts.high * 0.5 +
     frequencyCounts.middle * 0.2 +
-    frequencyCounts.low * 0.05
+    frequencyCounts.low * 0.05 +
+    messageLengthCounts.veryShort * 0.05 +
+    messageLengthCounts.short * 0.2 +
+    messageLengthCounts.middle * 0.5 +
+    messageLengthCounts.long
   );
 };
 
@@ -263,6 +294,18 @@ const getFrequencyCountType = (lastUpdate: number|undefined): keyof FrequencyCou
   }
 }
 
+const getMessageLengthType = (messageLength: number): keyof MessageLengthCounts => {
+  if (messageLength < 50) {
+    return "veryShort";
+  } else if (messageLength < 150) {
+    return "short";
+  } else if (messageLength < 300) {
+    return "middle"
+  } else {
+    return "long";
+  }
+}
+
 export interface UserGuildActivityEntry {
   id: string;
   userId: string;
@@ -271,7 +314,8 @@ export interface UserGuildActivityEntry {
   replyCount: number;
   reactionCount: number;
   mentionedCount: number;
-  frequencyCounts: FrequencyCounts;
+  frequencyCounts: FrequencyCounts; // how many times a user showed up: very often - rarely
+  messageLengthCounts: MessageLengthCounts; // lengths of user messages: very short - long
   activityScore: number;
   updatedAt: number;
 }
@@ -281,6 +325,13 @@ interface FrequencyCounts {
   high: number,
   middle: number,
   low: number,
+}
+
+interface MessageLengthCounts {
+  veryShort: number,
+  short: number,
+  middle: number,
+  long: number,
 }
 
 export interface ExcludedUserGuildEntry {

@@ -105,7 +105,7 @@ client.on("messageCreate", async (msg: Message) => {
   const replyIncrement = isReply ? 1 : 0;
 
   incrementUserGuildMentions(mentionedUsers, guildId);
-  incrementUserGuildActivities(userId, guildId , messageIncrement, replyIncrement, 0);
+  incrementUserGuildActivities(userId, guildId , messageIncrement, replyIncrement, 0, 0, msg.content.length);
 });
 
 client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser) => {
@@ -119,7 +119,7 @@ client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessag
     // user is not excluded, continue
   }
 
-  incrementUserGuildActivities(userId, guildId , 0, 0, 1);
+  incrementUserGuildActivities(userId, guildId , 0, 0, 1, 0, 0);
 });
 
 client.on('interactionCreate', async (interaction: Interaction) => {
