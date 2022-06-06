@@ -18,11 +18,12 @@ import {
   includeUserGuild,
   getExcludedUserGuild,
   getNMostActiveUsers,
-  incrementUserGuildActivities,
-  incrementUserGuildMentions,
+  updateUserGuildActivities,
+  updateUserGuildMentions,
+  startAudioVideoSession,
   getAllExcludedUserGuild,
   ExcludedUserGuildEntry,
-  UserGuildActivityEntry,
+  UserGuildActivityEntry, endAudioVideoSession,
 } from "./aws-dynamodb";
 
 dotenv.config();
@@ -76,11 +77,44 @@ rest.put(Routes.applicationCommands(process.env.DISCORD_CLIENT_ID!), { body: com
 
 const client = new Client({
   partials: ['MESSAGE', 'CHANNEL', 'REACTION', 'GUILD_MEMBER', 'USER'],
-  intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES, Intents.FLAGS.GUILD_MESSAGE_REACTIONS]
+  intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES, Intents.FLAGS.GUILD_MESSAGE_REACTIONS, Intents.FLAGS.GUILD_VOICE_STATES]
 });
 
 client.on("ready", () => {
   console.log("Itheum bot is ready to go!");
+});
+
+client.on("voiceStateUpdate", (oldState, newState) => {
+  const userId = newState.id;
+  const guildId = newState.guild.id;
+
+  if (!oldState.streaming && newState.streaming) {
+    startAudioVideoSession(userId, guildId, 'screencast');
+  }
+  if (oldState.streaming && !newState.streaming) {
+    endAudioVideoSession(userId, guildId, 'screencast');
+  }
+
+  if (!oldState.selfVideo && newState.selfVideo) {
+    startAudioVideoSession(userId, guildId, 'video');
+  }
+  if (oldState.selfVideo && !newState.selfVideo) {
+    endAudioVideoSession(userId, guildId, 'video');
+  }
+
+  if (!oldState.selfMute && newState.selfMute) {
+    startAudioVideoSession(userId, guildId, 'microphone');
+  }
+  if (oldState.selfMute && !newState.selfMute) {
+    endAudioVideoSession(userId, guildId, 'microphone');
+  }
+
+  if (!oldState.channel && newState.channel) {
+    startAudioVideoSession(userId, guildId, 'voiceChannel');
+  }
+  if (oldState.channel && !newState.channel) {
+    endAudioVideoSession(userId, guildId, 'voiceChannel');
+  }
 });
 
 client.on("messageCreate", async (msg: Message) => {
@@ -104,8 +138,8 @@ client.on("messageCreate", async (msg: Message) => {
   const messageIncrement = isReply ? 0 : 1;
   const replyIncrement = isReply ? 1 : 0;
 
-  incrementUserGuildMentions(mentionedUsers, guildId);
-  incrementUserGuildActivities(userId, guildId , messageIncrement, replyIncrement, 0, 0, msg.content.length);
+  //incrementUserGuildMentions(mentionedUsers, guildId);
+  //incrementUserGuildActivities(userId, guildId , messageIncrement, replyIncrement, 0, 0, msg.content.length);
 });
 
 client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser) => {
@@ -119,7 +153,7 @@ client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessag
     // user is not excluded, continue
   }
 
-  incrementUserGuildActivities(userId, guildId , 0, 0, 1, 0, 0);
+  //incrementUserGuildActivities(userId, guildId , 0, 0, 1, 0, 0);
 });
 
 client.on('interactionCreate', async (interaction: Interaction) => {

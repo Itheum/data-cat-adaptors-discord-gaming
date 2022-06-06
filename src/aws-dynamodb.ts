@@ -126,14 +126,14 @@ export async function getNMostActiveUsers(n = 1, guildId: string): Promise<UserG
   return [];
 }
 
-export async function incrementUserGuildMentions(
+export async function updateUserGuildMentions(
   userIds: string[],
   guildId: string,
 ): Promise<void> {
-  userIds.forEach(userId => incrementUserGuildActivities(userId, guildId, 0, 0,0, 1, 0));
+  userIds.forEach(userId => updateUserGuildActivities(userId, guildId, 0, 0,0, 1, 0));
 }
 
-export async function incrementUserGuildActivities(
+export async function updateUserGuildActivities(
   userId: string,
   guildId: string,
   messageIncrement = 0,
@@ -144,18 +144,7 @@ export async function incrementUserGuildActivities(
 ): Promise<void> {
   const dynamoDbSingleton = getDynamoDbSingleton();
 
-  const existingEntry = await dynamoDbSingleton.scan({
-    TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
-    FilterExpression: 'userId = :userId and guildId = :guildId',
-    ExpressionAttributeValues: {
-      ':userId': userId,
-      ':guildId': guildId
-    }
-  }).promise()
-    .catch((err: any) => {
-      console.error(`error while scanning for userId ${userId} and guildId ${guildId} in table ${process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME}`, err);
-      throw err;
-    });
+  const existingEntry = await getExistingEntry(userId, guildId);
 
   if (!existingEntry || existingEntry.Count === 0) {
     // add new
@@ -251,6 +240,167 @@ export async function incrementUserGuildActivities(
   }
 }
 
+export async function startAudioVideoSession(
+  userId: string,
+  guildId: string,
+  type: 'voiceChannel' | 'microphone' | 'video' | 'screencast'
+): Promise<void> {
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  const existingEntry = await getExistingEntry(userId, guildId);
+
+  if (!existingEntry || existingEntry.Count === 0) {
+    // add new
+
+    const audioVideoActivities = {
+      joinedVoiceChannelAt: 0,
+        enabledMicrophoneAt: 0,
+        enabledVideoAt: 0,
+        enabledScreencastAt: 0,
+        totalTimeInVoiceChannel: 0,
+        totalTimeWithMicrophone: 0,
+        totalTimeWithVideo: 0,
+        totalTimeWithScreencast: 0,
+    };
+
+    if (type === 'voiceChannel') {
+      audioVideoActivities.joinedVoiceChannelAt = Date.now();
+    } else if (type === 'microphone') {
+      audioVideoActivities.enabledMicrophoneAt = Date.now();
+    } else if (type === 'video') {
+      audioVideoActivities.enabledVideoAt = Date.now();
+    } else if (type === 'screencast') {
+      audioVideoActivities.enabledScreencastAt = Date.now();
+    }
+
+    try {
+      await dynamoDbSingleton.put({
+        TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
+        Item: {
+          id: v4(),
+          userId,
+          guildId,
+          messageCount: 0,
+          replyCount: 0,
+          reactionCount: 0,
+          mentionedCount: 0,
+          frequencyCounts: {
+            veryHigh: 0,
+            high: 0,
+            middle: 0,
+            low: 0,
+          },
+          messageLengthCounts: {
+            veryShort: 0,
+            short: 0,
+            middle: 0,
+            long: 0,
+          },
+          audioVideoActivities: audioVideoActivities,
+          activityScore: 0,
+          updatedAt: Date.now(),
+        } as UserGuildActivityEntry,
+      }).promise();
+      console.log(`inserted new entry: userId=${userId} and guildId=${guildId}`);
+    } catch(err: any) {
+      console.error(`error while saving new user activity for userId ${userId} and guildId ${guildId}`, err);
+      throw err;
+    }
+  } else {
+    // update existing
+    const entry = existingEntry.Items![0] as UserGuildActivityEntry;
+
+    if (!entry.audioVideoActivities) {
+      entry.audioVideoActivities = {
+        joinedVoiceChannelAt: 0,
+        enabledMicrophoneAt: 0,
+        enabledVideoAt: 0,
+        enabledScreencastAt: 0,
+        totalTimeInVoiceChannel: 0,
+        totalTimeWithMicrophone: 0,
+        totalTimeWithScreencast: 0,
+        totalTimeWithVideo: 0,
+      }
+    }
+
+    if (type === 'voiceChannel') {
+      entry.audioVideoActivities.joinedVoiceChannelAt = Date.now();
+    } else if (type === 'microphone') {
+      entry.audioVideoActivities.enabledMicrophoneAt = Date.now();
+    } else if (type === 'video') {
+      entry.audioVideoActivities.enabledVideoAt = Date.now();
+    } else if (type === 'screencast') {
+      entry.audioVideoActivities.enabledScreencastAt = Date.now();
+    }
+    entry.updatedAt = Date.now();
+
+    try {
+      await dynamoDbSingleton.put({
+        TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
+        Item: entry,
+      }).promise();
+      console.log(`updated existing entry: userId=${userId} and guildId=${guildId}`);
+    } catch(err: any)  {
+      console.error(`error while saving new user activity for userId ${userId} and guildId ${guildId}`, err);
+      throw err;
+    }
+  }
+}
+
+export async function endAudioVideoSession(
+  userId: string,
+  guildId: string,
+  type: 'voiceChannel' | 'microphone' | 'video' | 'screencast'
+): Promise<void> {
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  const existingEntry = await getExistingEntry(userId, guildId);
+
+  if (existingEntry) {
+    const entry = existingEntry.Items![0] as UserGuildActivityEntry;
+
+    if (type === 'voiceChannel') {
+      entry.audioVideoActivities.totalTimeInVoiceChannel += Math.round(Date.now() - entry.audioVideoActivities.joinedVoiceChannelAt);
+    } else if (type === 'microphone') {
+      entry.audioVideoActivities.totalTimeWithMicrophone += Math.round(Date.now() - entry.audioVideoActivities.enabledMicrophoneAt);
+    } else if (type === 'video') {
+      entry.audioVideoActivities.totalTimeWithVideo += Math.round(Date.now() - entry.audioVideoActivities.enabledVideoAt);
+    } else if (type === 'screencast') {
+      entry.audioVideoActivities.totalTimeWithScreencast = Math.round(Date.now() - entry.audioVideoActivities.enabledScreencastAt);
+    }
+    entry.updatedAt = Date.now();
+    entry.activityScore += calculateAudioVideoScore(entry.audioVideoActivities);
+
+    try {
+      await dynamoDbSingleton.put({
+        TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
+        Item: entry,
+      }).promise();
+      console.log(`updated existing entry: userId=${userId} and guildId=${guildId}`);
+    } catch(err: any)  {
+      console.error(`error while saving new user activity for userId ${userId} and guildId ${guildId}`, err);
+      throw err;
+    }
+  }
+}
+
+const getExistingEntry = async (userId: string, guildId: string): Promise<AWS.DynamoDB.DocumentClient.ScanOutput> => {
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  return dynamoDbSingleton.scan({
+    TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
+    FilterExpression: 'userId = :userId and guildId = :guildId',
+    ExpressionAttributeValues: {
+      ':userId': userId,
+      ':guildId': guildId
+    }
+  }).promise()
+    .catch((err: any) => {
+      console.error(`error while scanning for userId ${userId} and guildId ${guildId} in table ${process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME}`, err);
+      throw err;
+    });
+};
+
 const calculateActivityScore = (
   messageCount: number,
   replyCount: number,
@@ -272,6 +422,17 @@ const calculateActivityScore = (
     messageLengthCounts.short * 0.2 +
     messageLengthCounts.middle * 0.5 +
     messageLengthCounts.long
+  );
+};
+
+const calculateAudioVideoScore = (
+  audioVideoActivities: AudioVideoActivities
+) => {
+  return Math.round(
+    audioVideoActivities.totalTimeWithScreencast * 3 +
+    audioVideoActivities.totalTimeWithVideo * 2 +
+    audioVideoActivities.totalTimeWithMicrophone +
+    audioVideoActivities.totalTimeInVoiceChannel * 0.5
   );
 };
 
@@ -320,6 +481,7 @@ export interface UserGuildActivityEntry {
   mentionedCount: number; // user got mentioned/replied to by some other user (passively)
   frequencyCounts: FrequencyCounts; // how many times a user showed up: very often - rarely
   messageLengthCounts: MessageLengthCounts; // lengths of user messages: very short - long
+  audioVideoActivities: AudioVideoActivities;
   activityScore: number;
   updatedAt: number;
 }
@@ -336,6 +498,17 @@ interface MessageLengthCounts {
   short: number,
   middle: number,
   long: number,
+}
+
+interface AudioVideoActivities {
+  joinedVoiceChannelAt: number;
+  enabledMicrophoneAt: number;
+  enabledVideoAt: number;
+  enabledScreencastAt: number;
+  totalTimeInVoiceChannel: number; // in seconds
+  totalTimeWithMicrophone: number; // in seconds
+  totalTimeWithVideo: number; // in seconds
+  totalTimeWithScreencast: number; // in seconds
 }
 
 export interface ExcludedUserGuildEntry {
