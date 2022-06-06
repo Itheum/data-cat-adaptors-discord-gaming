@@ -315,9 +315,9 @@ export interface UserGuildActivityEntry {
   userId: string;
   guildId: string;
   messageCount: number;
-  replyCount: number;
+  replyCount: number; // user mentions/replies to other user (actively)
   reactionCount: number;
-  mentionedCount: number;
+  mentionedCount: number; // user got mentioned/replied to by some other user (passively)
   frequencyCounts: FrequencyCounts; // how many times a user showed up: very often - rarely
   messageLengthCounts: MessageLengthCounts; // lengths of user messages: very short - long
   activityScore: number;
