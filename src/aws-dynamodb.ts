@@ -2,6 +2,7 @@ import AWS from "aws-sdk";
 import { v4 } from 'uuid';
 
 const ONE_HOUR_IN_S = 60 * 60;
+const ONE_S_IN_MS = 1000;
 
 let dynamoDb: AWS.DynamoDB.DocumentClient | null = null;
 
@@ -360,13 +361,13 @@ export async function endAudioVideoSession(
     const entry = existingEntry.Items![0] as UserGuildActivityEntry;
 
     if (type === 'voiceChannel') {
-      entry.audioVideoActivities.totalTimeInVoiceChannel += Math.round(Date.now() - entry.audioVideoActivities.joinedVoiceChannelAt);
+      entry.audioVideoActivities.totalTimeInVoiceChannel += Math.round((Date.now() - entry.audioVideoActivities.joinedVoiceChannelAt) / (ONE_S_IN_MS * ONE_HOUR_IN_S));
     } else if (type === 'microphone') {
-      entry.audioVideoActivities.totalTimeWithMicrophone += Math.round(Date.now() - entry.audioVideoActivities.enabledMicrophoneAt);
+      entry.audioVideoActivities.totalTimeWithMicrophone += Math.round((Date.now() - entry.audioVideoActivities.enabledMicrophoneAt) / (ONE_S_IN_MS * ONE_HOUR_IN_S));
     } else if (type === 'video') {
-      entry.audioVideoActivities.totalTimeWithVideo += Math.round(Date.now() - entry.audioVideoActivities.enabledVideoAt);
+      entry.audioVideoActivities.totalTimeWithVideo += Math.round((Date.now() - entry.audioVideoActivities.enabledVideoAt) / (ONE_S_IN_MS * ONE_HOUR_IN_S));
     } else if (type === 'screencast') {
-      entry.audioVideoActivities.totalTimeWithScreencast = Math.round(Date.now() - entry.audioVideoActivities.enabledScreencastAt);
+      entry.audioVideoActivities.totalTimeWithScreencast = Math.round((Date.now() - entry.audioVideoActivities.enabledScreencastAt) / (ONE_S_IN_MS * ONE_HOUR_IN_S));
     }
     entry.updatedAt = Date.now();
     entry.activityScore += calculateAudioVideoScore(entry.audioVideoActivities);
@@ -505,10 +506,10 @@ interface AudioVideoActivities {
   enabledMicrophoneAt: number;
   enabledVideoAt: number;
   enabledScreencastAt: number;
-  totalTimeInVoiceChannel: number; // in seconds
-  totalTimeWithMicrophone: number; // in seconds
-  totalTimeWithVideo: number; // in seconds
-  totalTimeWithScreencast: number; // in seconds
+  totalTimeInVoiceChannel: number; // in hours
+  totalTimeWithMicrophone: number; // in hours
+  totalTimeWithVideo: number; // in hours
+  totalTimeWithScreencast: number; // in hours
 }
 
 export interface ExcludedUserGuildEntry {
