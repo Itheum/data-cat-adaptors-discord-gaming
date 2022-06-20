@@ -222,7 +222,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
   }
 });
 
-const formatExcludedUserGuild = (excludedUserGuild: ExcludedUserGuildEntry[]) => {
+function formatExcludedUserGuild(excludedUserGuild: ExcludedUserGuildEntry[]) {
   if (!excludedUserGuild || excludedUserGuild.length === 0) {
     return "no results";
   }
@@ -233,9 +233,9 @@ const formatExcludedUserGuild = (excludedUserGuild: ExcludedUserGuildEntry[]) =>
     result += exclUserGuild.userId + ' - ' + exclUserGuild.date + '\n';
   }
   return result;
-};
+}
 
-const formatMostActiveUsers = (mostActiveUsers: UserGuildActivityEntry[]) => {
+function formatMostActiveUsers(mostActiveUsers: UserGuildActivityEntry[]) {
   if (!mostActiveUsers || mostActiveUsers.length === 0) {
     return "no results";
   }
@@ -246,6 +246,6 @@ const formatMostActiveUsers = (mostActiveUsers: UserGuildActivityEntry[]) => {
     result += activeUsers.userId + ' - ' + activeUsers.activityScore + '\n';
   }
   return result;
-};
+}
 
 client.login(process.env.DISCORD_BOT_TOKEN).catch(console.error);
