@@ -236,6 +236,117 @@ async function addNewUserGuildActivityEntry(
   }
 }
 
+async function addNewAudioVideoSession(
+  userId: string,
+  guildId: string,
+  type: 'voiceChannel' | 'microphone' | 'video' | 'screencast'
+): Promise<void> {
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  const audioVideoActivities = {
+    joinedVoiceChannelAt: 0,
+    enabledMicrophoneAt: 0,
+    enabledVideoAt: 0,
+    enabledScreencastAt: 0,
+    totalTimeInVoiceChannel: 0,
+    totalTimeWithMicrophone: 0,
+    totalTimeWithVideo: 0,
+    totalTimeWithScreencast: 0,
+  };
+
+  if (type === 'voiceChannel') {
+    audioVideoActivities.joinedVoiceChannelAt = Date.now();
+  } else if (type === 'microphone') {
+    audioVideoActivities.enabledMicrophoneAt = Date.now();
+  } else if (type === 'video') {
+    audioVideoActivities.enabledVideoAt = Date.now();
+  } else if (type === 'screencast') {
+    audioVideoActivities.enabledScreencastAt = Date.now();
+  }
+
+  const item: UserGuildActivityEntry = {
+      id: v4(),
+      userId,
+      guildId,
+      messageCount: 0,
+      replyCount: 0,
+      reactionCount: 0,
+      mentionedCount: 0,
+      frequencyCounts: {
+        veryHigh: 0,
+        high: 0,
+        middle: 0,
+        low: 0,
+      },
+      messageLengthCounts: {
+        veryShort: 0,
+        short: 0,
+        middle: 0,
+        long: 0,
+      },
+      audioVideoActivities: audioVideoActivities,
+      activityScore: 0,
+      updatedAt: Date.now(),
+    };
+
+  try {
+    await dynamoDbSingleton.put({
+      TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
+      Item: item,
+    }).promise();
+    console.log(`inserted new entry: userId=${userId} and guildId=${guildId}`);
+  } catch(err: any) {
+    console.error(`error while saving new user activity for userId ${userId} and guildId ${guildId}`, err);
+    throw err;
+  }
+}
+
+async function updateExistingAudioVideoSession(
+  userId: string,
+  guildId: string,
+  existingEntry: AWS.DynamoDB.DocumentClient.ScanOutput,
+  type: 'voiceChannel' | 'microphone' | 'video' | 'screencast'
+): Promise<void> {
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  const entry = existingEntry.Items![0] as UserGuildActivityEntry;
+
+  if (!entry.audioVideoActivities) {
+    entry.audioVideoActivities = {
+      joinedVoiceChannelAt: 0,
+      enabledMicrophoneAt: 0,
+      enabledVideoAt: 0,
+      enabledScreencastAt: 0,
+      totalTimeInVoiceChannel: 0,
+      totalTimeWithMicrophone: 0,
+      totalTimeWithScreencast: 0,
+      totalTimeWithVideo: 0,
+    }
+  }
+
+  if (type === 'voiceChannel') {
+    entry.audioVideoActivities.joinedVoiceChannelAt = Date.now();
+  } else if (type === 'microphone') {
+    entry.audioVideoActivities.enabledMicrophoneAt = Date.now();
+  } else if (type === 'video') {
+    entry.audioVideoActivities.enabledVideoAt = Date.now();
+  } else if (type === 'screencast') {
+    entry.audioVideoActivities.enabledScreencastAt = Date.now();
+  }
+  entry.updatedAt = Date.now();
+
+  try {
+    await dynamoDbSingleton.put({
+      TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
+      Item: entry,
+    }).promise();
+    console.log(`updated existing entry: userId=${userId} and guildId=${guildId}`);
+  } catch(err: any)  {
+    console.error(`error while saving new user activity for userId ${userId} and guildId ${guildId}`, err);
+    throw err;
+  }
+}
+
 async function updateExistingUserGuildActivityEntry(
   userId: string,
   guildId: string,
@@ -301,105 +412,21 @@ export async function startAudioVideoSession(
   guildId: string,
   type: 'voiceChannel' | 'microphone' | 'video' | 'screencast'
 ): Promise<void> {
-  const dynamoDbSingleton = getDynamoDbSingleton();
-
   const existingEntry = await getExistingEntry(userId, guildId);
 
   if (!existingEntry || existingEntry.Count === 0) {
-    // add new
-
-    const audioVideoActivities = {
-      joinedVoiceChannelAt: 0,
-        enabledMicrophoneAt: 0,
-        enabledVideoAt: 0,
-        enabledScreencastAt: 0,
-        totalTimeInVoiceChannel: 0,
-        totalTimeWithMicrophone: 0,
-        totalTimeWithVideo: 0,
-        totalTimeWithScreencast: 0,
-    };
-
-    if (type === 'voiceChannel') {
-      audioVideoActivities.joinedVoiceChannelAt = Date.now();
-    } else if (type === 'microphone') {
-      audioVideoActivities.enabledMicrophoneAt = Date.now();
-    } else if (type === 'video') {
-      audioVideoActivities.enabledVideoAt = Date.now();
-    } else if (type === 'screencast') {
-      audioVideoActivities.enabledScreencastAt = Date.now();
-    }
-
-    try {
-      await dynamoDbSingleton.put({
-        TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
-        Item: {
-          id: v4(),
-          userId,
-          guildId,
-          messageCount: 0,
-          replyCount: 0,
-          reactionCount: 0,
-          mentionedCount: 0,
-          frequencyCounts: {
-            veryHigh: 0,
-            high: 0,
-            middle: 0,
-            low: 0,
-          },
-          messageLengthCounts: {
-            veryShort: 0,
-            short: 0,
-            middle: 0,
-            long: 0,
-          },
-          audioVideoActivities: audioVideoActivities,
-          activityScore: 0,
-          updatedAt: Date.now(),
-        } as UserGuildActivityEntry,
-      }).promise();
-      console.log(`inserted new entry: userId=${userId} and guildId=${guildId}`);
-    } catch(err: any) {
-      console.error(`error while saving new user activity for userId ${userId} and guildId ${guildId}`, err);
-      throw err;
-    }
+    await addNewAudioVideoSession(
+      userId,
+      guildId,
+      type,
+    );
   } else {
-    // update existing
-    const entry = existingEntry.Items![0] as UserGuildActivityEntry;
-
-    if (!entry.audioVideoActivities) {
-      entry.audioVideoActivities = {
-        joinedVoiceChannelAt: 0,
-        enabledMicrophoneAt: 0,
-        enabledVideoAt: 0,
-        enabledScreencastAt: 0,
-        totalTimeInVoiceChannel: 0,
-        totalTimeWithMicrophone: 0,
-        totalTimeWithScreencast: 0,
-        totalTimeWithVideo: 0,
-      }
-    }
-
-    if (type === 'voiceChannel') {
-      entry.audioVideoActivities.joinedVoiceChannelAt = Date.now();
-    } else if (type === 'microphone') {
-      entry.audioVideoActivities.enabledMicrophoneAt = Date.now();
-    } else if (type === 'video') {
-      entry.audioVideoActivities.enabledVideoAt = Date.now();
-    } else if (type === 'screencast') {
-      entry.audioVideoActivities.enabledScreencastAt = Date.now();
-    }
-    entry.updatedAt = Date.now();
-
-    try {
-      await dynamoDbSingleton.put({
-        TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
-        Item: entry,
-      }).promise();
-      console.log(`updated existing entry: userId=${userId} and guildId=${guildId}`);
-    } catch(err: any)  {
-      console.error(`error while saving new user activity for userId ${userId} and guildId ${guildId}`, err);
-      throw err;
-    }
+    await updateExistingAudioVideoSession(
+      userId,
+      guildId,
+      existingEntry,
+      type,
+    );
   }
 }
 
