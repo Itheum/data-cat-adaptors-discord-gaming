@@ -11,6 +11,7 @@ export interface UserGuildActivityEntry {
   audioVideoActivities: AudioVideoActivities;
   activityScore: number;
   updatedAt: number;
+  version: string;
 }
 
 export interface FrequencyCounts {

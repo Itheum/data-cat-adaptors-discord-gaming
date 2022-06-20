@@ -1,12 +1,13 @@
 {
   "name": "discord-data-cat-poc",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "PoC for Discord CAT",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "start:dev": "tsc && node dist/index.js"
+    "start:dev": "tsc && node dist/index.js",
+    "start:recalc": "tsc && node dist/scripts/recalculate-activity-score.js"
   },
   "author": "Peter Holzer | Itheum",
   "license": "ISC",

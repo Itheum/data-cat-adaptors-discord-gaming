@@ -14,7 +14,7 @@ const ONE_S_IN_MS = 1000;
 
 let dynamoDb: AWS.DynamoDB.DocumentClient | null = null;
 
-function getDynamoDbSingleton(): AWS.DynamoDB.DocumentClient {
+export function getDynamoDbSingleton(): AWS.DynamoDB.DocumentClient {
   if (!dynamoDb) {
     console.log('set up dynamo db client instance');
 
@@ -182,7 +182,7 @@ export async function updateUserGuildActivities(
   }
 }
 
-async function addNewUserGuildActivityEntry(
+export async function addNewUserGuildActivityEntry(
   userId: string,
   guildId: string,
   messageIncrement = 0,
@@ -236,7 +236,7 @@ async function addNewUserGuildActivityEntry(
   }
 }
 
-async function addNewAudioVideoSession(
+export async function addNewAudioVideoSession(
   userId: string,
   guildId: string,
   type: 'voiceChannel' | 'microphone' | 'video' | 'screencast'
@@ -287,6 +287,7 @@ async function addNewAudioVideoSession(
       audioVideoActivities: audioVideoActivities,
       activityScore: 0,
       updatedAt: Date.now(),
+      version: process.env.npm_package_version!,
     };
 
   try {
@@ -301,7 +302,7 @@ async function addNewAudioVideoSession(
   }
 }
 
-async function updateExistingAudioVideoSession(
+export async function updateExistingAudioVideoSession(
   userId: string,
   guildId: string,
   existingEntry: AWS.DynamoDB.DocumentClient.ScanOutput,
@@ -347,7 +348,7 @@ async function updateExistingAudioVideoSession(
   }
 }
 
-async function updateExistingUserGuildActivityEntry(
+export async function updateExistingUserGuildActivityEntry(
   userId: string,
   guildId: string,
   existingEntry: AWS.DynamoDB.DocumentClient.ScanOutput,
@@ -392,8 +393,15 @@ async function updateExistingUserGuildActivityEntry(
   entry.reactionCount += reactionIncrement;
   entry.mentionedCount += mentionedIncrement;
   entry.frequencyCounts[getFrequencyCountType(entry.updatedAt)] += 1;
-  entry.activityScore = calculateActivityScore(entry.messageCount, entry.replyCount, entry.reactionCount, entry.mentionedCount, entry.frequencyCounts, entry.messageLengthCounts);
   entry.updatedAt = Date.now();
+  entry.activityScore = calculateActivityScore(
+    entry.messageCount,
+    entry.replyCount,
+    entry.reactionCount,
+    entry.mentionedCount,
+    entry.frequencyCounts,
+    entry.messageLengthCounts,
+  ) + calculateAudioVideoScore(entry.audioVideoActivities);
 
   try {
     await dynamoDbSingleton.put({
@@ -452,7 +460,15 @@ export async function endAudioVideoSession(
       entry.audioVideoActivities.totalTimeWithScreencast = Math.round((Date.now() - entry.audioVideoActivities.enabledScreencastAt) / (ONE_S_IN_MS * ONE_MINUTE_IN_S));
     }
     entry.updatedAt = Date.now();
-    entry.activityScore += calculateAudioVideoScore(entry.audioVideoActivities);
+
+    entry.activityScore = calculateActivityScore(
+      entry.messageCount,
+      entry.replyCount,
+      entry.replyCount,
+      entry.mentionedCount,
+      entry.frequencyCounts,
+      entry.messageLengthCounts,
+    ) + calculateAudioVideoScore(entry.audioVideoActivities);
 
     try {
       await dynamoDbSingleton.put({
@@ -467,7 +483,7 @@ export async function endAudioVideoSession(
   }
 }
 
-async function getExistingEntry (userId: string, guildId: string): Promise<AWS.DynamoDB.DocumentClient.ScanOutput> {
+export async function getExistingEntry (userId: string, guildId: string): Promise<AWS.DynamoDB.DocumentClient.ScanOutput> {
   const dynamoDbSingleton = getDynamoDbSingleton();
 
   try {
@@ -485,7 +501,7 @@ async function getExistingEntry (userId: string, guildId: string): Promise<AWS.D
   }
 }
 
-function calculateActivityScore (
+export function calculateActivityScore (
   messageCount: number,
   replyCount: number,
   reactionCount: number,
@@ -493,6 +509,34 @@ function calculateActivityScore (
   frequencyCounts: FrequencyCounts,
   messageLengthCounts: MessageLengthCounts,
 ) {
+  if (!messageCount) {
+    messageCount = 0;
+  }
+  if (!replyCount) {
+    replyCount = 0;
+  }
+  if (!reactionCount) {
+    reactionCount = 0;
+  }
+  if (!mentionedCount) {
+    mentionedCount = 0;
+  }
+  if (!frequencyCounts) {
+    frequencyCounts = {
+      veryHigh: 0,
+      high: 0,
+      middle: 0,
+      low: 0,
+    }
+  }
+  if (!messageLengthCounts) {
+    messageLengthCounts = {
+      veryShort: 0,
+      short: 0,
+      middle: 0,
+      long: 0,
+    }
+  }
   return Math.round(
     messageCount * 3 +
     replyCount * 2 +
@@ -509,7 +553,10 @@ function calculateActivityScore (
   );
 }
 
-function calculateAudioVideoScore(audioVideoActivities: AudioVideoActivities) {
+export function calculateAudioVideoScore(audioVideoActivities: AudioVideoActivities) {
+  if (!audioVideoActivities) {
+    return 0;
+  }
   return Math.round(
     audioVideoActivities.totalTimeWithScreencast * 3 +
     audioVideoActivities.totalTimeWithVideo * 2 +
@@ -518,11 +565,11 @@ function calculateAudioVideoScore(audioVideoActivities: AudioVideoActivities) {
   );
 }
 
-function activityScoreSort(a: UserGuildActivityEntry, b: UserGuildActivityEntry): number {
+export function activityScoreSort(a: UserGuildActivityEntry, b: UserGuildActivityEntry): number {
   return a.activityScore > b.activityScore ? -1 : 1;
 }
 
-function getFrequencyCountType(lastUpdate: number|undefined): keyof FrequencyCounts {
+export function getFrequencyCountType(lastUpdate: number|undefined): keyof FrequencyCounts {
   // in case the entry has no updatedAt yet
   if (!lastUpdate) {
     return "veryHigh";
@@ -541,7 +588,7 @@ function getFrequencyCountType(lastUpdate: number|undefined): keyof FrequencyCou
   }
 }
 
-function getMessageLengthType (messageLength: number): keyof MessageLengthCounts {
+export function getMessageLengthType (messageLength: number): keyof MessageLengthCounts {
   if (messageLength < 50) {
     return "veryShort";
   } else if (messageLength < 150) {

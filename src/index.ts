@@ -22,10 +22,9 @@ import {
   updateUserGuildMentions,
   startAudioVideoSession,
   getAllExcludedUserGuild,
-
   endAudioVideoSession,
 } from "./aws-dynamodb-connector";
-import {ExcludedUserGuildEntry, UserGuildActivityEntry} from "./dynamodb-interfaces";
+import { ExcludedUserGuildEntry, UserGuildActivityEntry } from "./dynamodb-interfaces";
 
 dotenv.config();
 
