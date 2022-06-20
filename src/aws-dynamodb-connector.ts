@@ -1,5 +1,12 @@
 import AWS from "aws-sdk";
 import { v4 } from 'uuid';
+import {
+  AudioVideoActivities,
+  ExcludedUserGuildEntry,
+  UserGuildActivityEntry,
+  MessageLengthCounts,
+  FrequencyCounts,
+} from "./dynamodb-interfaces";
 
 const ONE_MINUTE_IN_S = 60;
 const ONE_HOUR_IN_S = ONE_MINUTE_IN_S * 60;
@@ -23,40 +30,42 @@ function getDynamoDbSingleton(): AWS.DynamoDB.DocumentClient {
 export async function getAllExcludedUserGuild(guildId: string): Promise<ExcludedUserGuildEntry[]> {
   const dynamoDbSingleton = getDynamoDbSingleton();
 
-  const existingEntry = await dynamoDbSingleton.scan({
-    TableName: process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME!,
-  }).promise()
-    .catch((err: any) => {
-      console.error(`error while scanning all entries for guildId ${guildId} in table ${process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME}`, err);
-      throw err;
-    });
+  try {
+    const existingEntry = await dynamoDbSingleton.scan({
+      TableName: process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME!,
+    }).promise();
 
-  if (existingEntry && existingEntry.Items) {
-    return existingEntry.Items as ExcludedUserGuildEntry[];
+    if (existingEntry && existingEntry.Items) {
+      return existingEntry.Items as ExcludedUserGuildEntry[];
+    }
+    return [];
+  } catch(err: any) {
+    console.error(`error while scanning all entries for guildId ${guildId} in table ${process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME}`, err);
+    throw err;
   }
-  return [];
 }
 
 export async function getExcludedUserGuild(userId: string, guildId: string): Promise<ExcludedUserGuildEntry> {
   const dynamoDbSingleton = getDynamoDbSingleton();
 
-  const existingEntry = await dynamoDbSingleton.scan({
-    TableName: process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME!,
-    FilterExpression: 'userId = :userId and guildId = :guildId',
-    ExpressionAttributeValues: {
-      ':userId': userId,
-      ':guildId': guildId
-    }
-  }).promise()
-    .catch((err: any) => {
-      console.error(`error while scanning for userId ${userId} and guildId ${guildId} in table ${process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME}`, err);
-      throw err;
-    });
+  try {
+    const existingEntry = await dynamoDbSingleton.scan({
+      TableName: process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME!,
+      FilterExpression: 'userId = :userId and guildId = :guildId',
+      ExpressionAttributeValues: {
+        ':userId': userId,
+        ':guildId': guildId
+      }
+    }).promise();
 
-  if (existingEntry && existingEntry.Count && existingEntry.Items && existingEntry.Count === 1 ) {
-    return existingEntry.Items[0] as ExcludedUserGuildEntry;
+    if (existingEntry && existingEntry.Count && existingEntry.Items && existingEntry.Count === 1) {
+      return existingEntry.Items[0] as ExcludedUserGuildEntry;
+    }
+    return {} as ExcludedUserGuildEntry;
+  } catch(err: any) {
+    console.error(`error while scanning for userId ${userId} and guildId ${guildId} in table ${process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME}`, err);
+    throw err;
   }
-  throw new Error(`no entry found for userId ${userId} and guildId ${guildId}`);
 }
 
 export async function excludeUserGuild(userId: string, guildId: string): Promise<void> {
@@ -70,15 +79,17 @@ export async function excludeUserGuild(userId: string, guildId: string): Promise
     // user doesn't exist, continue
   }
 
+  const item: ExcludedUserGuildEntry = {
+      id: v4(),
+      userId,
+      guildId,
+      date: new Date().toISOString(),
+    };
+
   try {
     await dynamoDbSingleton.put({
       TableName: process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME!,
-      Item: {
-        id: v4(),
-        userId,
-        guildId,
-        date: new Date().toISOString(),
-      } as ExcludedUserGuildEntry,
+      Item: item,
     }).promise();
     console.log(`excluded userId=${userId} and guildId=${guildId}`);
   } catch(err: any) {
@@ -109,23 +120,24 @@ export async function includeUserGuild(userId: string, guildId: string): Promise
 export async function getNMostActiveUsers(n = 1, guildId: string): Promise<UserGuildActivityEntry[]> {
   const dynamoDbSingleton = getDynamoDbSingleton();
 
-  // todo improve: sort and limit by DB query, not by code
-  const existingEntries = await dynamoDbSingleton.scan({
-    TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
-    FilterExpression: 'guildId = :guildId',
-    ExpressionAttributeValues: {
-      ':guildId': guildId
-    },
-  }).promise()
-    .catch((err: any) => {
-      console.error(`error while scanning for most ${n} active users`, err);
-      throw err;
-    });
+  try {
+    // todo improve: sort and limit by DB query, not by code
+    const existingEntries = await dynamoDbSingleton.scan({
+      TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
+      FilterExpression: 'guildId = :guildId',
+      ExpressionAttributeValues: {
+        ':guildId': guildId
+      },
+    }).promise();
 
-  if (existingEntries && existingEntries.Items) {
-    return (existingEntries.Items as UserGuildActivityEntry[]).sort(activityScoreSort).slice(0, n);
+    if (existingEntries && existingEntries.Items) {
+      return (existingEntries.Items as UserGuildActivityEntry[]).sort(activityScoreSort).slice(0, n);
+    }
+    return [];
+  } catch(err: any) {
+    console.error(`error while scanning for most ${n} active users`, err);
+    throw err;
   }
-  return [];
 }
 
 export async function updateUserGuildMentions(
@@ -144,101 +156,143 @@ export async function updateUserGuildActivities(
   mentionedIncrement = 0,
   messageLength = 0,
 ): Promise<void> {
-  const dynamoDbSingleton = getDynamoDbSingleton();
-
   const existingEntry = await getExistingEntry(userId, guildId);
 
   if (!existingEntry || existingEntry.Count === 0) {
-    // add new
-    const frequencyCounts: FrequencyCounts = {
+    await addNewUserGuildActivityEntry(
+      userId,
+      guildId,
+      messageIncrement,
+      replyIncrement,
+      reactionIncrement,
+      mentionedIncrement,
+      messageLength,
+    );
+  } else {
+    await updateExistingUserGuildActivityEntry(
+      userId,
+      guildId,
+      existingEntry,
+      messageIncrement,
+      replyIncrement,
+      reactionIncrement,
+      mentionedIncrement,
+      messageLength,
+    );
+  }
+}
+
+async function addNewUserGuildActivityEntry(
+  userId: string,
+  guildId: string,
+  messageIncrement = 0,
+  replyIncrement = 0,
+  reactionIncrement = 0,
+  mentionedIncrement = 0,
+  messageLength = 0,
+): Promise<void> {
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  const frequencyCounts: FrequencyCounts = {
+    veryHigh: 0,
+    high: 0,
+    middle: 0,
+    low: 0,
+  };
+  frequencyCounts[getFrequencyCountType(Date.now())] += 1;
+
+  const messageLengthCounts: MessageLengthCounts = {
+    veryShort: 0,
+    short: 0,
+    middle: 0,
+    long: 0,
+  };
+
+  if (messageLength > 0) {
+    messageLengthCounts[getMessageLengthType(messageLength)] += 1;
+  }
+
+  try {
+    await dynamoDbSingleton.put({
+      TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
+      Item: {
+        id: v4(),
+        userId,
+        guildId,
+        messageCount: messageIncrement,
+        replyCount: replyIncrement,
+        reactionCount: reactionIncrement,
+        mentionedCount: mentionedIncrement,
+        frequencyCounts: frequencyCounts,
+        messageLengthCounts: messageLengthCounts,
+        activityScore: calculateActivityScore(messageIncrement, replyIncrement, reactionIncrement, mentionedIncrement, frequencyCounts, messageLengthCounts),
+        updatedAt: Date.now(),
+      } as UserGuildActivityEntry,
+    }).promise();
+    console.log(`inserted new entry: userId=${userId} and guildId=${guildId}`);
+  } catch(err: any) {
+    console.error(`error while saving new user activity for userId ${userId} and guildId ${guildId}`, err);
+    throw err;
+  }
+}
+
+async function updateExistingUserGuildActivityEntry(
+  userId: string,
+  guildId: string,
+  existingEntry: AWS.DynamoDB.DocumentClient.ScanOutput,
+  messageIncrement = 0,
+  replyIncrement = 0,
+  reactionIncrement = 0,
+  mentionedIncrement = 0,
+  messageLength = 0,
+): Promise<void> {
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  const entry = existingEntry.Items![0] as UserGuildActivityEntry;
+
+  if (!entry.frequencyCounts) {
+    entry.frequencyCounts = {
       veryHigh: 0,
       high: 0,
       middle: 0,
       low: 0,
     };
-    frequencyCounts[getFrequencyCountType(Date.now())] += 1;
+  }
 
-    const messageLengthCounts: MessageLengthCounts = {
+  if (!entry.messageLengthCounts) {
+    entry.messageLengthCounts = {
       veryShort: 0,
       short: 0,
       middle: 0,
       long: 0,
     };
+  }
 
-    if (messageLength > 0) {
-      messageLengthCounts[getMessageLengthType(messageLength)] += 1;
-    }
+  if (messageLength > 0) {
+    entry.messageLengthCounts[getMessageLengthType(messageLength)] += 1;
+  }
 
-    try {
-      await dynamoDbSingleton.put({
-        TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
-        Item: {
-          id: v4(),
-          userId,
-          guildId,
-          messageCount: messageIncrement,
-          replyCount: replyIncrement,
-          reactionCount: reactionIncrement,
-          mentionedCount: mentionedIncrement,
-          frequencyCounts: frequencyCounts,
-          messageLengthCounts: messageLengthCounts,
-          activityScore: calculateActivityScore(messageIncrement, replyIncrement, reactionIncrement, mentionedIncrement, frequencyCounts, messageLengthCounts),
-          updatedAt: Date.now(),
-        } as UserGuildActivityEntry,
-      }).promise();
-      console.log(`inserted new entry: userId=${userId} and guildId=${guildId}`);
-    } catch(err: any) {
-      console.error(`error while saving new user activity for userId ${userId} and guildId ${guildId}`, err);
-      throw err;
-    }
-  } else {
-    // update existing
-    const entry = existingEntry.Items![0] as UserGuildActivityEntry;
+  if (!entry.mentionedCount) {
+    entry.mentionedCount = 0;
+  }
 
-    if (!entry.frequencyCounts) {
-      entry.frequencyCounts = {
-        veryHigh: 0,
-        high: 0,
-        middle: 0,
-        low: 0,
-      };
-    }
+  entry.messageCount += messageIncrement;
+  entry.replyCount += replyIncrement;
+  entry.reactionCount += reactionIncrement;
+  entry.mentionedCount += mentionedIncrement;
+  entry.frequencyCounts[getFrequencyCountType(entry.updatedAt)] += 1;
+  entry.activityScore = calculateActivityScore(entry.messageCount, entry.replyCount, entry.reactionCount, entry.mentionedCount, entry.frequencyCounts, entry.messageLengthCounts);
+  entry.updatedAt = Date.now();
 
-    if (!entry.messageLengthCounts) {
-      entry.messageLengthCounts = {
-        veryShort: 0,
-        short: 0,
-        middle: 0,
-        long: 0,
-      };
-    }
-
-    if (messageLength > 0) {
-      entry.messageLengthCounts[getMessageLengthType(messageLength)] += 1;
-    }
-
-    if (!entry.mentionedCount) {
-      entry.mentionedCount = 0;
-    }
-
-    entry.messageCount += messageIncrement;
-    entry.replyCount += replyIncrement;
-    entry.reactionCount += reactionIncrement;
-    entry.mentionedCount += mentionedIncrement;
-    entry.frequencyCounts[getFrequencyCountType(entry.updatedAt)] += 1;
-    entry.activityScore = calculateActivityScore(entry.messageCount, entry.replyCount, entry.reactionCount, entry.mentionedCount, entry.frequencyCounts, entry.messageLengthCounts);
-    entry.updatedAt = Date.now();
-
-    try {
-      await dynamoDbSingleton.put({
-        TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
-        Item: entry,
-      }).promise();
-      console.log(`updated existing entry: userId=${userId} and guildId=${guildId}`);
-    } catch(err: any)  {
-      console.error(`error while saving new user activity for userId ${userId} and guildId ${guildId}`, err);
-      throw err;
-    }
+  try {
+    await dynamoDbSingleton.put({
+      TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
+      Item: entry,
+    }).promise();
+    console.log(`updated existing entry: userId=${userId} and guildId=${guildId}`);
+  } catch(err: any)  {
+    console.error(`error while saving new user activity for userId ${userId} and guildId ${guildId}`, err);
+    throw err;
   }
 }
 
@@ -386,31 +440,32 @@ export async function endAudioVideoSession(
   }
 }
 
-const getExistingEntry = async (userId: string, guildId: string): Promise<AWS.DynamoDB.DocumentClient.ScanOutput> => {
+async function getExistingEntry (userId: string, guildId: string): Promise<AWS.DynamoDB.DocumentClient.ScanOutput> {
   const dynamoDbSingleton = getDynamoDbSingleton();
 
-  return dynamoDbSingleton.scan({
-    TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
-    FilterExpression: 'userId = :userId and guildId = :guildId',
-    ExpressionAttributeValues: {
-      ':userId': userId,
-      ':guildId': guildId
-    }
-  }).promise()
-    .catch((err: any) => {
-      console.error(`error while scanning for userId ${userId} and guildId ${guildId} in table ${process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME}`, err);
-      throw err;
-    });
-};
+  try {
+    return dynamoDbSingleton.scan({
+      TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
+      FilterExpression: 'userId = :userId and guildId = :guildId',
+      ExpressionAttributeValues: {
+        ':userId': userId,
+        ':guildId': guildId
+      }
+    }).promise();
+  } catch(err: any) {
+    console.error(`error while scanning for userId ${userId} and guildId ${guildId} in table ${process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME}`, err);
+    throw err;
+  }
+}
 
-const calculateActivityScore = (
+function calculateActivityScore (
   messageCount: number,
   replyCount: number,
   reactionCount: number,
   mentionedCount: number,
   frequencyCounts: FrequencyCounts,
   messageLengthCounts: MessageLengthCounts,
-) => {
+) {
   return Math.round(
     messageCount * 3 +
     replyCount * 2 +
@@ -425,24 +480,22 @@ const calculateActivityScore = (
     messageLengthCounts.middle * 0.5 +
     messageLengthCounts.long
   );
-};
+}
 
-const calculateAudioVideoScore = (
-  audioVideoActivities: AudioVideoActivities
-) => {
+function calculateAudioVideoScore(audioVideoActivities: AudioVideoActivities) {
   return Math.round(
     audioVideoActivities.totalTimeWithScreencast * 3 +
     audioVideoActivities.totalTimeWithVideo * 2 +
     audioVideoActivities.totalTimeWithMicrophone +
     audioVideoActivities.totalTimeInVoiceChannel * 0.25
   );
-};
+}
 
-const activityScoreSort = (a: UserGuildActivityEntry, b: UserGuildActivityEntry): number => {
+function activityScoreSort(a: UserGuildActivityEntry, b: UserGuildActivityEntry): number {
   return a.activityScore > b.activityScore ? -1 : 1;
 }
 
-const getFrequencyCountType = (lastUpdate: number|undefined): keyof FrequencyCounts => {
+function getFrequencyCountType(lastUpdate: number|undefined): keyof FrequencyCounts {
   // in case the entry has no updatedAt yet
   if (!lastUpdate) {
     return "veryHigh";
@@ -461,7 +514,7 @@ const getFrequencyCountType = (lastUpdate: number|undefined): keyof FrequencyCou
   }
 }
 
-const getMessageLengthType = (messageLength: number): keyof MessageLengthCounts => {
+function getMessageLengthType (messageLength: number): keyof MessageLengthCounts {
   if (messageLength < 50) {
     return "veryShort";
   } else if (messageLength < 150) {
@@ -471,51 +524,4 @@ const getMessageLengthType = (messageLength: number): keyof MessageLengthCounts 
   } else {
     return "long";
   }
-}
-
-export interface UserGuildActivityEntry {
-  id: string;
-  userId: string;
-  guildId: string;
-  messageCount: number;
-  replyCount: number; // user mentions/replies to other user (actively)
-  reactionCount: number;
-  mentionedCount: number; // user got mentioned/replied to by some other user (passively)
-  frequencyCounts: FrequencyCounts; // how many times a user showed up: very often - rarely
-  messageLengthCounts: MessageLengthCounts; // lengths of user messages: very short - long
-  audioVideoActivities: AudioVideoActivities;
-  activityScore: number;
-  updatedAt: number;
-}
-
-interface FrequencyCounts {
-  veryHigh: number,
-  high: number,
-  middle: number,
-  low: number,
-}
-
-interface MessageLengthCounts {
-  veryShort: number,
-  short: number,
-  middle: number,
-  long: number,
-}
-
-interface AudioVideoActivities {
-  joinedVoiceChannelAt: number;
-  enabledMicrophoneAt: number;
-  enabledVideoAt: number;
-  enabledScreencastAt: number;
-  totalTimeInVoiceChannel: number; // in minutes
-  totalTimeWithMicrophone: number; // in minutes
-  totalTimeWithVideo: number; // in minutes
-  totalTimeWithScreencast: number; // in minutes
-}
-
-export interface ExcludedUserGuildEntry {
-  id: string;
-  userId: string;
-  guildId: string;
-  date: string;
 }

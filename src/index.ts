@@ -22,9 +22,10 @@ import {
   updateUserGuildMentions,
   startAudioVideoSession,
   getAllExcludedUserGuild,
-  ExcludedUserGuildEntry,
-  UserGuildActivityEntry, endAudioVideoSession,
-} from "./aws-dynamodb";
+
+  endAudioVideoSession,
+} from "./aws-dynamodb-connector";
+import {ExcludedUserGuildEntry, UserGuildActivityEntry} from "./dynamodb-interfaces";
 
 dotenv.config();
 
@@ -138,8 +139,8 @@ client.on("messageCreate", async (msg: Message) => {
   const messageIncrement = isReply ? 0 : 1;
   const replyIncrement = isReply ? 1 : 0;
 
-  //incrementUserGuildMentions(mentionedUsers, guildId);
-  //incrementUserGuildActivities(userId, guildId , messageIncrement, replyIncrement, 0, 0, msg.content.length);
+  updateUserGuildMentions(mentionedUsers, guildId);
+  updateUserGuildActivities(userId, guildId , messageIncrement, replyIncrement, 0, 0, msg.content.length);
 });
 
 client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser) => {
@@ -153,7 +154,7 @@ client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessag
     // user is not excluded, continue
   }
 
-  //incrementUserGuildActivities(userId, guildId , 0, 0, 1, 0, 0);
+  updateUserGuildActivities(userId, guildId , 0, 0, 1, 0, 0);
 });
 
 client.on('interactionCreate', async (interaction: Interaction) => {
