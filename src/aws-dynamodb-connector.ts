@@ -227,6 +227,7 @@ export async function addNewUserGuildActivityEntry(
         messageLengthCounts: messageLengthCounts,
         activityScore: calculateActivityScore(messageIncrement, replyIncrement, reactionIncrement, mentionedIncrement, frequencyCounts, messageLengthCounts),
         updatedAt: Date.now(),
+        version: process.env.npm_package_version!,
       } as UserGuildActivityEntry,
     }).promise();
     console.log(`inserted new entry: userId=${userId} and guildId=${guildId}`);
