@@ -61,11 +61,11 @@ export async function getExcludedUserGuild(userId: string, guildId: string): Pro
     if (existingEntry && existingEntry.Count && existingEntry.Items && existingEntry.Count === 1) {
       return existingEntry.Items[0] as ExcludedUserGuildEntry;
     }
-    return {} as ExcludedUserGuildEntry;
   } catch(err: any) {
     console.error(`error while scanning for userId ${userId} and guildId ${guildId} in table ${process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME}`, err);
     throw err;
   }
+  throw new Error(`no entry found for userId ${userId} and guildId ${guildId}`);
 }
 
 export async function excludeUserGuild(userId: string, guildId: string): Promise<void> {
