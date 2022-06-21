@@ -111,9 +111,17 @@ client.on("voiceStateUpdate", (oldState, newState) => {
 
   if (!oldState.channel && newState.channel) {
     startAudioVideoSession(userId, guildId, 'voiceChannel');
+
+    if (!newState.selfMute) {
+      startAudioVideoSession(userId, guildId, 'microphone');
+    }
   }
   if (oldState.channel && !newState.channel) {
     endAudioVideoSession(userId, guildId, 'voiceChannel');
+
+    if (!oldState.selfMute) {
+      endAudioVideoSession(userId, guildId, 'microphone');
+    }
   }
 });
 
