@@ -102,10 +102,10 @@ client.on("voiceStateUpdate", (oldState, newState) => {
     endAudioVideoSession(userId, guildId, 'video');
   }
 
-  if (!oldState.selfMute && newState.selfMute) {
+  if (oldState.selfMute && !newState.selfMute) {
     startAudioVideoSession(userId, guildId, 'microphone');
   }
-  if (oldState.selfMute && !newState.selfMute) {
+  if (!oldState.selfMute && newState.selfMute) {
     endAudioVideoSession(userId, guildId, 'microphone');
   }
 
