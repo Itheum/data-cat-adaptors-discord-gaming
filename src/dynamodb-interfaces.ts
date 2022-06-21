@@ -1,5 +1,4 @@
 export interface UserGuildActivityEntry {
-  id: string;
   userId: string;
   guildId: string;
   messageCount: number;

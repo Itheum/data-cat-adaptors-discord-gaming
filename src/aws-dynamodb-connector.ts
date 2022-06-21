@@ -216,7 +216,6 @@ export async function addNewUserGuildActivityEntry(
     await dynamoDbSingleton.put({
       TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
       Item: {
-        id: v4(),
         userId,
         guildId,
         messageCount: messageIncrement,
@@ -266,7 +265,6 @@ export async function addNewAudioVideoSession(
   }
 
   const item: UserGuildActivityEntry = {
-      id: v4(),
       userId,
       guildId,
       messageCount: 0,
