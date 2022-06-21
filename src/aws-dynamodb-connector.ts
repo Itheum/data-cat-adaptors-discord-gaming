@@ -488,9 +488,9 @@ export async function getExistingEntry (userId: string, guildId: string): Promis
   const dynamoDbSingleton = getDynamoDbSingleton();
 
   try {
-    return dynamoDbSingleton.scan({
+    return dynamoDbSingleton.query({
       TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
-      FilterExpression: 'userId = :userId and guildId = :guildId',
+      KeyConditionExpression: 'userId = :userId and guildId = :guildId',
       ExpressionAttributeValues: {
         ':userId': userId,
         ':guildId': guildId

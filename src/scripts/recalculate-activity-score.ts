@@ -1,7 +1,7 @@
 import {
   calculateActivityScore,
   calculateAudioVideoScore,
-  getDynamoDbSingleton
+  getDynamoDbSingleton,
 } from "../aws-dynamodb-connector";
 import { UserGuildActivityEntry } from "../dynamodb-interfaces";
 import dotenv from "dotenv";
