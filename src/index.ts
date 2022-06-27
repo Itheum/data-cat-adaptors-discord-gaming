@@ -1,4 +1,8 @@
 import dotenv from 'dotenv';
+import { ExcludedChannelGuildEntry, ExcludedUserGuildEntry } from "./dynamodb-interfaces";
+import { REST } from "@discordjs/rest";
+import { SlashCommandBuilder } from "@discordjs/builders"
+import { Routes } from "discord-api-types/v9";
 import {
   Client,
   Intents,
@@ -12,9 +16,6 @@ import {
   GuildMember,
   Guild,
 } from "discord.js";
-import { REST } from "@discordjs/rest";
-import { SlashCommandBuilder } from "@discordjs/builders"
-import { Routes } from "discord-api-types/v9";
 import {
   excludeUserGuild,
   includeUserGuild,
@@ -28,94 +29,103 @@ import {
   includeChannelGuild,
   getAllExcludedChannelGuild, getExcludedChannelGuild,
 } from "./aws-dynamodb-connector";
-import {ExcludedChannelGuildEntry, ExcludedUserGuildEntry} from "./dynamodb-interfaces";
+import {
+  ADMIN_COMMANDS,
+  ADMIN_ROLES,
+  CONNECT_ELROND_WALLET_COMMAND,
+  EXCLUDE_CHANNEL_COMMAND,
+  EXCLUDE_GAMER_COMMAND, GAMER_PASSPORT_COMMANDS, GAMER_PASSPORT_ROLE,
+  INCLUDE_CHANNEL_COMMAND,
+  INCLUDE_GAMER_COMMAND, MY_PORTAL_COMMAND,
+  REGISTER_FOR_GAMER_PASSPORT_COMMAND,
+  TOGGLE_ADAPTER_STATUS_COMMAND,
+  VIEW_ADAPTER_STATUS_COMMAND,
+  VIEW_EXCLUDED_CHANNELS_COMMAND,
+  VIEW_EXCLUDED_GAMERS_COMMAND
+} from "./constants";
 
 dotenv.config();
-
-const ALLOWED_ROLES_FOR_COMMAND_INTERACTION = ['Owner', 'Data Auditors'];
-const GAMER_PASSPORT_ROLE = "Gamer Passport";
-
 
 /* Register commands */
 
 const commands = [
   // include, exclude and list excluded gamers
   (new SlashCommandBuilder()
-    .setName('exclude-gamer')
+    .setName(EXCLUDE_GAMER_COMMAND)
     .setDescription('Excludes gamer from being tracked')
     .addStringOption(option =>
       option.setName('user-id')
         .setDescription('The id of the user to be excluded')
         .setRequired(true))
-    .setDefaultPermission(false))
+    .setDefaultPermission(true))
     .toJSON(),
   (new SlashCommandBuilder()
-    .setName('include-gamer')
+    .setName(INCLUDE_GAMER_COMMAND)
     .setDescription('Includes gamer for being tracked')
     .addStringOption(option =>
       option.setName('user-id')
         .setDescription('The id of the user to be included')
         .setRequired(true))
-    .setDefaultPermission(false))
+    .setDefaultPermission(true))
     .toJSON(),
   (new SlashCommandBuilder()
-    .setName('view-excluded-gamers')
+    .setName(VIEW_EXCLUDED_GAMERS_COMMAND)
     .setDescription('Views excluded gamers from being tracked')
-    .setDefaultPermission(false))
+    .setDefaultPermission(true))
     .toJSON(),
 
   // include, exclude and list excluded channels
   (new SlashCommandBuilder()
-    .setName('exclude-channel')
+    .setName(EXCLUDE_CHANNEL_COMMAND)
     .setDescription('Excludes channel from being tracked')
     .addStringOption(option =>
       option.setName('channel-id')
         .setDescription('The id of the channel to be excluded')
         .setRequired(true))
-    .setDefaultPermission(false))
+    .setDefaultPermission(true))
     .toJSON(),
   (new SlashCommandBuilder()
-    .setName('include-channel')
+    .setName(INCLUDE_CHANNEL_COMMAND)
     .setDescription('Includes channel for being tracked')
     .addStringOption(option =>
       option.setName('channel-id')
         .setDescription('The id of the channel to be included')
         .setRequired(true))
-    .setDefaultPermission(false))
+    .setDefaultPermission(true))
     .toJSON(),
   (new SlashCommandBuilder()
-    .setName('view-excluded-channels')
+    .setName(VIEW_EXCLUDED_CHANNELS_COMMAND)
     .setDescription('Views excluded channels from being tracked')
-    .setDefaultPermission(false))
+    .setDefaultPermission(true))
     .toJSON(),
 
   // toggle and view adapter status
   (new SlashCommandBuilder()
-    .setName('toggle-adapter-status')
+    .setName(TOGGLE_ADAPTER_STATUS_COMMAND)
     .setDescription('Toggles adapter status (running/paused)')
-    .setDefaultPermission(false))
+    .setDefaultPermission(true))
     .toJSON(),
   (new SlashCommandBuilder()
-    .setName('view-adapter-status')
+    .setName(VIEW_ADAPTER_STATUS_COMMAND)
     .setDescription('Views the adapter status (running/paused)')
-    .setDefaultPermission(false))
+    .setDefaultPermission(true))
     .toJSON(),
 
   // register for gamer passport, show my portal and connect Elrond wallet
   (new SlashCommandBuilder()
-    .setName('register-for-gamer-passport')
+    .setName(REGISTER_FOR_GAMER_PASSPORT_COMMAND)
     .setDescription('Returns a link for registering for the gamer passport')
-    .setDefaultPermission(false))
+    .setDefaultPermission(true))
     .toJSON(),
   (new SlashCommandBuilder()
-    .setName('my-portal')
+    .setName(MY_PORTAL_COMMAND)
     .setDescription('Returns a link for viewing user portal')
-    .setDefaultPermission(false))
+    .setDefaultPermission(true))
     .toJSON(),
   (new SlashCommandBuilder()
-    .setName('connect-elrond-wallet')
+    .setName(CONNECT_ELROND_WALLET_COMMAND)
     .setDescription('Returns a link for connecting Elrond wallet')
-    .setDefaultPermission(false))
+    .setDefaultPermission(true))
     .toJSON(),
 ];
 
@@ -260,16 +270,21 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     return;
   }
 
-  const highestUserRole = (interaction!.member!.roles as any)['highest']['name'] as string;
-
-  if (!ALLOWED_ROLES_FOR_COMMAND_INTERACTION.includes(highestUserRole)) {
-    await interaction.reply(`only ${ALLOWED_ROLES_FOR_COMMAND_INTERACTION.toString()} are allowed to perform these commands`);
-    return;
+  if (ADMIN_COMMANDS.includes(interaction.commandName)) {
+    if (!guildMemberHasAdminRole(interaction!.member! as GuildMember)) {
+      await interaction.reply(`only ${ADMIN_ROLES.toString()} are allowed to perform this command`);
+      return;
+    }
+  } else if (GAMER_PASSPORT_COMMANDS.includes(interaction.commandName)) {
+    if (!guildOrGuildMemberHasGamerPassportRole(interaction!.member! as GuildMember)) {
+      await interaction.reply(`only ${GAMER_PASSPORT_ROLE} is allowed to perform this command`);
+      return;
+    }
   }
 
   const guildId = interaction.guildId!;
 
-  if (interaction.commandName === 'exclude-gamer') {
+  if (interaction.commandName === EXCLUDE_GAMER_COMMAND) {
     const userId = interaction.options.get('user-id')?.value as string;
 
     if (!userId) {
@@ -282,7 +297,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     } catch (err: any) {
       await interaction.reply('error while excluding gamer');
     }
-  } else if(interaction.commandName === 'include-gamer') {
+  } else if(interaction.commandName === INCLUDE_GAMER_COMMAND) {
     const userId = interaction.options.get('user-id')?.value as string;
 
     if (!userId) {
@@ -295,7 +310,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     } catch (err: any) {
       await interaction.reply('error while including gamer');
     }
-  } else if(interaction.commandName === 'view-excluded-gamers') {
+  } else if(interaction.commandName === VIEW_EXCLUDED_GAMERS_COMMAND) {
     try {
       const excludedUserGuild = await getAllExcludedUserGuild(guildId);
 
@@ -303,7 +318,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     } catch (err: any) {
       await interaction.reply('error while viewing excluded gamers');
     }
-  } else if (interaction.commandName === 'exclude-channel') {
+  } else if (interaction.commandName === EXCLUDE_CHANNEL_COMMAND) {
     const channelId = interaction.options.get('channel-id')?.value as string;
 
     if (!channelId) {
@@ -316,7 +331,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     } catch (err: any) {
       await interaction.reply('error while excluding channel');
     }
-  } else if(interaction.commandName === 'include-channel') {
+  } else if(interaction.commandName === INCLUDE_CHANNEL_COMMAND) {
     const channelId = interaction.options.get('channel-id')?.value as string;
 
     if (!channelId) {
@@ -329,7 +344,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     } catch (err: any) {
       await interaction.reply('error while including channel');
     }
-  } else if(interaction.commandName === 'view-excluded-channels') {
+  } else if(interaction.commandName === VIEW_EXCLUDED_CHANNELS_COMMAND) {
     try {
       const excludedChannelGuild = await getAllExcludedChannelGuild(guildId);
 
@@ -337,21 +352,21 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     } catch (err: any) {
       await interaction.reply('error while viewing excluded channels');
     }
-  } else if(interaction.commandName === 'toggle-adapter-status') {
+  } else if(interaction.commandName === TOGGLE_ADAPTER_STATUS_COMMAND) {
     adapterIsRunning != adapterIsRunning;
     await interaction.reply(`adapter mode changed to ${adapterIsRunning ? 'running' : 'paused'}`);
 
-  } else if(interaction.commandName === 'view-adapter-status') {
+  } else if(interaction.commandName === VIEW_ADAPTER_STATUS_COMMAND) {
     adapterIsRunning != adapterIsRunning;
     await interaction.reply(`adapter is currently ${adapterIsRunning ? 'running' : 'paused'}`);
 
-  } else if(interaction.commandName === 'register-for-gamer-passport') {
+  } else if(interaction.commandName === REGISTER_FOR_GAMER_PASSPORT_COMMAND) {
     await interaction.reply(`head over to https://itheum.com/gamerpassport`);
 
-  } else if(interaction.commandName === 'my-portal') {
+  } else if(interaction.commandName === MY_PORTAL_COMMAND) {
     await interaction.reply(`head over to https://itheum.com/gamerpassport`);
 
-  } else if(interaction.commandName === 'connect-elrond-wallet') {
+  } else if(interaction.commandName === CONNECT_ELROND_WALLET_COMMAND) {
     await interaction.reply(`head over to https://itheum.com/gamerpassport`);
   }
 });
@@ -388,6 +403,10 @@ function getGuildOrGuildMemberRoleNames(guildOrGuildMember: Guild | GuildMember)
 
 function guildOrGuildMemberHasGamerPassportRole(guildOrGuildMember: Guild | GuildMember): boolean {
   return getGuildOrGuildMemberRoleNames(guildOrGuildMember).includes(GAMER_PASSPORT_ROLE);
+}
+
+function guildMemberHasAdminRole(guildMember: GuildMember): boolean {
+  return getGuildOrGuildMemberRoleNames(guildMember).some(role => ADMIN_ROLES.includes(role));
 }
 
 client.login(process.env.DISCORD_BOT_TOKEN).catch(console.error);
