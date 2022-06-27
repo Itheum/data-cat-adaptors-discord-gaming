@@ -39,7 +39,7 @@ const GAMER_PASSPORT_ROLE = "Gamer Passport";
 /* Register commands */
 
 const commands = [
-  // users (=gamers)
+  // include, exclude and list excluded gamers
   (new SlashCommandBuilder()
     .setName('exclude-gamer')
     .setDescription('Excludes gamer from being tracked')
@@ -64,7 +64,7 @@ const commands = [
     .setDefaultPermission(false))
     .toJSON(),
 
-  // channels
+  // include, exclude and list excluded channels
   (new SlashCommandBuilder()
     .setName('exclude-channel')
     .setDescription('Excludes channel from being tracked')
@@ -88,6 +88,8 @@ const commands = [
     .setDescription('Views excluded channels from being tracked')
     .setDefaultPermission(false))
     .toJSON(),
+
+  // toggle and view adapter status
   (new SlashCommandBuilder()
     .setName('toggle-adapter-status')
     .setDescription('Toggles adapter status (running/paused)')
@@ -96,6 +98,23 @@ const commands = [
   (new SlashCommandBuilder()
     .setName('view-adapter-status')
     .setDescription('Views the adapter status (running/paused)')
+    .setDefaultPermission(false))
+    .toJSON(),
+
+  // register for gamer passport, show my portal and connect Elrond wallet
+  (new SlashCommandBuilder()
+    .setName('register-for-gamer-passport')
+    .setDescription('Returns a link for registering for the gamer passport')
+    .setDefaultPermission(false))
+    .toJSON(),
+  (new SlashCommandBuilder()
+    .setName('my-portal')
+    .setDescription('Returns a link for viewing user portal')
+    .setDefaultPermission(false))
+    .toJSON(),
+  (new SlashCommandBuilder()
+    .setName('connect-elrond-wallet')
+    .setDescription('Returns a link for connecting Elrond wallet')
     .setDefaultPermission(false))
     .toJSON(),
 ];
@@ -321,9 +340,19 @@ client.on('interactionCreate', async (interaction: Interaction) => {
   } else if(interaction.commandName === 'toggle-adapter-status') {
     adapterIsRunning != adapterIsRunning;
     await interaction.reply(`adapter mode changed to ${adapterIsRunning ? 'running' : 'paused'}`);
+
   } else if(interaction.commandName === 'view-adapter-status') {
     adapterIsRunning != adapterIsRunning;
     await interaction.reply(`adapter is currently ${adapterIsRunning ? 'running' : 'paused'}`);
+
+  } else if(interaction.commandName === 'register-for-gamer-passport') {
+    await interaction.reply(`head over to https://itheum.com/gamerpassport`);
+
+  } else if(interaction.commandName === 'my-portal') {
+    await interaction.reply(`head over to https://itheum.com/gamerpassport`);
+
+  } else if(interaction.commandName === 'connect-elrond-wallet') {
+    await interaction.reply(`head over to https://itheum.com/gamerpassport`);
   }
 });
 
