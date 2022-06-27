@@ -8,7 +8,9 @@ import {
   TextChannel,
   User,
   Interaction,
-  PartialMessageReaction
+  PartialMessageReaction,
+  GuildMember,
+  Guild,
 } from "discord.js";
 import { REST } from "@discordjs/rest";
 import { SlashCommandBuilder } from "@discordjs/builders"
@@ -28,7 +30,8 @@ import { ExcludedUserGuildEntry, UserGuildActivityEntry } from "./dynamodb-inter
 
 dotenv.config();
 
-const allowedRolesForCommandInteraction = ['Owner', 'Data Auditors'];
+const ALLOWED_ROLES_FOR_COMMAND_INTERACTION = ['Owner', 'Data Auditors'];
+const GAMER_PASSPORT_ROLE = "Gamer Passport";
 
 
 /* Register commands */
@@ -85,6 +88,10 @@ client.on("ready", () => {
 });
 
 client.on("voiceStateUpdate", (oldState, newState) => {
+  if (guildOrGuildMemberHasGamerPassportRole(oldState.guild!) && !guildOrGuildMemberHasGamerPassportRole(oldState.member!)) {
+    return;
+  }
+
   const userId = newState.id;
   const guildId = newState.guild.id;
 
@@ -126,6 +133,10 @@ client.on("voiceStateUpdate", (oldState, newState) => {
 });
 
 client.on("messageCreate", async (msg: Message) => {
+  if (guildOrGuildMemberHasGamerPassportRole(msg.guild!) && !guildOrGuildMemberHasGamerPassportRole(msg.member!)) {
+    return;
+  }
+
   const userId = msg.author.id;
   const guildId = (msg.channel as TextChannel).guild.id;
   const isReply = msg.mentions.users.size !== 0;
@@ -151,6 +162,12 @@ client.on("messageCreate", async (msg: Message) => {
 });
 
 client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser) => {
+  const guildMember = reaction.message.guild!.members.cache.toJSON().find(member => member.user.id === user.id);
+
+  if (guildOrGuildMemberHasGamerPassportRole(reaction.message.guild!) && !guildOrGuildMemberHasGamerPassportRole(guildMember!)) {
+    return;
+  }
+
   const userId = user.id;
   const guildId = (reaction.message.channel as TextChannel)!.guild.id;
 
@@ -171,8 +188,8 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
   const highestUserRole = (interaction!.member!.roles as any)['highest']['name'] as string;
 
-  if (!allowedRolesForCommandInteraction.includes(highestUserRole)) {
-    await interaction.reply(`only ${allowedRolesForCommandInteraction.toString()} are allowed to perform these commands`);
+  if (!ALLOWED_ROLES_FOR_COMMAND_INTERACTION.includes(highestUserRole)) {
+    await interaction.reply(`only ${ALLOWED_ROLES_FOR_COMMAND_INTERACTION.toString()} are allowed to perform these commands`);
     return;
   }
 
@@ -253,6 +270,14 @@ function formatMostActiveUsers(mostActiveUsers: UserGuildActivityEntry[]) {
     result += activeUsers.userId + ' - ' + activeUsers.activityScore + '\n';
   }
   return result;
+}
+
+function getGuildOrGuildMemberRoleNames(guildOrGuildMember: Guild | GuildMember): string[] {
+  return guildOrGuildMember.roles.cache.toJSON().map(role => role.name);
+}
+
+function guildOrGuildMemberHasGamerPassportRole(guildOrGuildMember: Guild | GuildMember): boolean {
+  return getGuildOrGuildMemberRoleNames(guildOrGuildMember).includes(GAMER_PASSPORT_ROLE);
 }
 
 client.login(process.env.DISCORD_BOT_TOKEN).catch(console.error);
