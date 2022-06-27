@@ -5,7 +5,7 @@ import {
   ExcludedUserGuildEntry,
   UserGuildActivityEntry,
   MessageLengthCounts,
-  FrequencyCounts,
+  FrequencyCounts, ExcludedChannelGuildEntry,
 } from "./dynamodb-interfaces";
 
 const ONE_MINUTE_IN_S = 60;
@@ -117,25 +117,92 @@ export async function includeUserGuild(userId: string, guildId: string): Promise
   }
 }
 
-export async function getNMostActiveUsers(n = 1, guildId: string): Promise<UserGuildActivityEntry[]> {
+export async function getAllExcludedChannelGuild(guildId: string): Promise<ExcludedChannelGuildEntry[]> {
   const dynamoDbSingleton = getDynamoDbSingleton();
 
   try {
-    // todo improve: sort and limit by DB query, not by code
-    const existingEntries = await dynamoDbSingleton.scan({
-      TableName: process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME!,
-      FilterExpression: 'guildId = :guildId',
-      ExpressionAttributeValues: {
-        ':guildId': guildId
-      },
+    const existingEntry = await dynamoDbSingleton.scan({
+      TableName: process.env.AWS_DYNAMODB_EXCLUDED_CHANNEL_TABLE_NAME!,
     }).promise();
 
-    if (existingEntries && existingEntries.Items) {
-      return (existingEntries.Items as UserGuildActivityEntry[]).sort(activityScoreSort).slice(0, n);
+    if (existingEntry && existingEntry.Items) {
+      return existingEntry.Items as ExcludedChannelGuildEntry[];
     }
     return [];
   } catch(err: any) {
-    console.error(`error while scanning for most ${n} active users`, err);
+    console.error(`error while scanning all entries for guildId ${guildId} in table ${process.env.AWS_DYNAMODB_EXCLUDED_CHANNEL_TABLE_NAME}`, err);
+    throw err;
+  }
+}
+
+export async function getExcludedChannelGuild(channelId: string, guildId: string): Promise<ExcludedChannelGuildEntry> {
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  try {
+    const existingEntry = await dynamoDbSingleton.scan({
+      TableName: process.env.AWS_DYNAMODB_EXCLUDED_CHANNEL_TABLE_NAME!,
+      FilterExpression: 'channelId = :channelId and guildId = :guildId',
+      ExpressionAttributeValues: {
+        ':channelId': channelId,
+        ':guildId': guildId
+      }
+    }).promise();
+
+    if (existingEntry && existingEntry.Count && existingEntry.Items && existingEntry.Count === 1) {
+      return existingEntry.Items[0] as ExcludedChannelGuildEntry;
+    }
+  } catch(err: any) {
+    console.error(`error while scanning for channelId ${channelId} and guildId ${guildId} in table ${process.env.AWS_DYNAMODB_EXCLUDED_CHANNEL_TABLE_NAME}`, err);
+    throw err;
+  }
+  throw new Error(`no entry found for channelId ${channelId} and guildId ${guildId}`);
+}
+
+export async function excludeChannelGuild(channelId: string, guildId: string): Promise<void> {
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  try {
+    await getExcludedChannelGuild(channelId, guildId);
+    console.log(`channelId=${channelId} and guildId=${guildId} already excluded`);
+    return;
+  } catch (err: any) {
+    // channel doesn't exist, continue
+  }
+
+  const item: ExcludedChannelGuildEntry = {
+    id: v4(),
+    channelId: channelId,
+    guildId,
+    date: new Date().toISOString(),
+  };
+
+  try {
+    await dynamoDbSingleton.put({
+      TableName: process.env.AWS_DYNAMODB_EXCLUDED_CHANNEL_TABLE_NAME!,
+      Item: item,
+    }).promise();
+    console.log(`excluded channelId=${channelId} and guildId=${guildId}`);
+  } catch(err: any) {
+    console.error(`error while saving new channel exclusion for channelId ${channelId} and guildId ${guildId}`, err);
+    throw err;
+  }
+}
+
+export async function includeChannelGuild(channelId: string, guildId: string): Promise<void> {
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  try {
+    const existingEntry = await getExcludedChannelGuild(channelId, guildId);
+
+    await dynamoDbSingleton.delete({
+      TableName: process.env.AWS_DYNAMODB_EXCLUDED_CHANNEL_TABLE_NAME!,
+      Key: {
+        id: existingEntry.id,
+      },
+    }).promise();
+    console.log(`included channelId=${channelId} and guildId=${guildId}`);
+  } catch(err: any) {
+    console.error(`error while deleting channel exclusion for channelId ${channelId} and guildId ${guildId}`, err);
     throw err;
   }
 }

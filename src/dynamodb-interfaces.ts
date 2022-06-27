@@ -44,3 +44,10 @@ export interface ExcludedUserGuildEntry {
   guildId: string;
   date: string;
 }
+
+export interface ExcludedChannelGuildEntry {
+  id: string;
+  channelId: string;
+  guildId: string;
+  date: string;
+}

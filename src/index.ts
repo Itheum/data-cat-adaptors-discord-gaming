@@ -19,14 +19,16 @@ import {
   excludeUserGuild,
   includeUserGuild,
   getExcludedUserGuild,
-  getNMostActiveUsers,
   updateUserGuildActivities,
   updateUserGuildMentions,
   startAudioVideoSession,
   getAllExcludedUserGuild,
   endAudioVideoSession,
+  excludeChannelGuild,
+  includeChannelGuild,
+  getAllExcludedChannelGuild, getExcludedChannelGuild,
 } from "./aws-dynamodb-connector";
-import { ExcludedUserGuildEntry, UserGuildActivityEntry } from "./dynamodb-interfaces";
+import {ExcludedChannelGuildEntry, ExcludedUserGuildEntry} from "./dynamodb-interfaces";
 
 dotenv.config();
 
@@ -37,9 +39,10 @@ const GAMER_PASSPORT_ROLE = "Gamer Passport";
 /* Register commands */
 
 const commands = [
+  // users (=gamers)
   (new SlashCommandBuilder()
-    .setName('exclude')
-    .setDescription('Excludes user from being tracked')
+    .setName('exclude-gamer')
+    .setDescription('Excludes gamer from being tracked')
     .addStringOption(option =>
       option.setName('user-id')
         .setDescription('The id of the user to be excluded')
@@ -47,26 +50,52 @@ const commands = [
     .setDefaultPermission(false))
     .toJSON(),
   (new SlashCommandBuilder()
-    .setName('re-include')
-    .setDescription('Re-includes user for being tracked')
+    .setName('include-gamer')
+    .setDescription('Includes gamer for being tracked')
     .addStringOption(option =>
       option.setName('user-id')
-        .setDescription('The id of the user to be ere-included')
+        .setDescription('The id of the user to be included')
         .setRequired(true))
     .setDefaultPermission(false))
     .toJSON(),
   (new SlashCommandBuilder()
-    .setName('list-excluded')
-    .setDescription('Lists excluded user from being tracked')
+    .setName('view-excluded-gamers')
+    .setDescription('Views excluded gamers from being tracked')
+    .setDefaultPermission(false))
+    .toJSON(),
+
+  // channels
+  (new SlashCommandBuilder()
+    .setName('exclude-channel')
+    .setDescription('Excludes channel from being tracked')
+    .addStringOption(option =>
+      option.setName('channel-id')
+        .setDescription('The id of the channel to be excluded')
+        .setRequired(true))
     .setDefaultPermission(false))
     .toJSON(),
   (new SlashCommandBuilder()
-    .setName('get-most-n-active-user')
-    .setDescription('Lists most N active users')
-    .addNumberOption(option =>
-      option.setName('n')
-        .setDescription('The amount of active users')
+    .setName('include-channel')
+    .setDescription('Includes channel for being tracked')
+    .addStringOption(option =>
+      option.setName('channel-id')
+        .setDescription('The id of the channel to be included')
         .setRequired(true))
+    .setDefaultPermission(false))
+    .toJSON(),
+  (new SlashCommandBuilder()
+    .setName('view-excluded-channels')
+    .setDescription('Views excluded channels from being tracked')
+    .setDefaultPermission(false))
+    .toJSON(),
+  (new SlashCommandBuilder()
+    .setName('toggle-adapter-status')
+    .setDescription('Toggles adapter status (running/paused)')
+    .setDefaultPermission(false))
+    .toJSON(),
+  (new SlashCommandBuilder()
+    .setName('view-adapter-status')
+    .setDescription('Views the adapter status (running/paused)')
     .setDefaultPermission(false))
     .toJSON(),
 ];
@@ -75,6 +104,7 @@ const rest = new REST({version: '9'}).setToken(process.env.DISCORD_BOT_TOKEN!);
 
 rest.put(Routes.applicationCommands(process.env.DISCORD_CLIENT_ID!), { body: commands }).catch(console.error);
 
+const adapterIsRunning = true;
 
 /* Setup client */
 
@@ -87,13 +117,26 @@ client.on("ready", () => {
   console.log("Itheum bot is ready to go!");
 });
 
-client.on("voiceStateUpdate", (oldState, newState) => {
-  if (guildOrGuildMemberHasGamerPassportRole(oldState.guild!) && !guildOrGuildMemberHasGamerPassportRole(oldState.member!)) {
+client.on("voiceStateUpdate", async (oldState, newState) => {
+  if (!adapterIsRunning) {
+    return;
+  }
+
+  if (guildOrGuildMemberHasGamerPassportRole(newState.guild!) && !guildOrGuildMemberHasGamerPassportRole(newState.member!)) {
     return;
   }
 
   const userId = newState.id;
   const guildId = newState.guild.id;
+  const channelId = newState.channel!.id
+
+  try {
+    await getExcludedUserGuild(userId, guildId);
+    await getExcludedChannelGuild(channelId, guildId);
+    return;
+  } catch (err: any) {
+    // user and channel are not excluded, continue
+  }
 
   if (!oldState.streaming && newState.streaming) {
     startAudioVideoSession(userId, guildId, 'screencast');
@@ -133,11 +176,16 @@ client.on("voiceStateUpdate", (oldState, newState) => {
 });
 
 client.on("messageCreate", async (msg: Message) => {
+  if (!adapterIsRunning) {
+    return;
+  }
+
   if (guildOrGuildMemberHasGamerPassportRole(msg.guild!) && !guildOrGuildMemberHasGamerPassportRole(msg.member!)) {
     return;
   }
 
   const userId = msg.author.id;
+  const channelId = msg.channel.id;
   const guildId = (msg.channel as TextChannel).guild.id;
   const isReply = msg.mentions.users.size !== 0;
 
@@ -149,9 +197,10 @@ client.on("messageCreate", async (msg: Message) => {
 
   try {
     await getExcludedUserGuild(userId, guildId);
+    await getExcludedChannelGuild(channelId, guildId);
     return;
   } catch (err: any) {
-    // user is not excluded, continue
+    // user and channel are not excluded, continue
   }
 
   const messageIncrement = isReply ? 0 : 1;
@@ -162,6 +211,10 @@ client.on("messageCreate", async (msg: Message) => {
 });
 
 client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser) => {
+  if (!adapterIsRunning) {
+    return;
+  }
+
   const guildMember = reaction.message.guild!.members.cache.toJSON().find(member => member.user.id === user.id);
 
   if (guildOrGuildMemberHasGamerPassportRole(reaction.message.guild!) && !guildOrGuildMemberHasGamerPassportRole(guildMember!)) {
@@ -169,13 +222,15 @@ client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessag
   }
 
   const userId = user.id;
+  const channelId = reaction.message.channel.id;
   const guildId = (reaction.message.channel as TextChannel)!.guild.id;
 
   try {
     await getExcludedUserGuild(userId, guildId);
+    await getExcludedChannelGuild(channelId, guildId);
     return;
   } catch (err: any) {
-    // user is not excluded, continue
+    // user and channel are not excluded, continue
   }
 
   updateUserGuildActivities(userId, guildId , 0, 0, 1, 0, 0);
@@ -195,7 +250,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
   const guildId = interaction.guildId!;
 
-  if (interaction.commandName === 'exclude') {
+  if (interaction.commandName === 'exclude-gamer') {
     const userId = interaction.options.get('user-id')?.value as string;
 
     if (!userId) {
@@ -204,11 +259,11 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
     try {
       await excludeUserGuild(userId, guildId);
-      await interaction.reply('excluded');
+      await interaction.reply('gamer excluded');
     } catch (err: any) {
-      await interaction.reply('error while excluding');
+      await interaction.reply('error while excluding gamer');
     }
-  } else if(interaction.commandName === 're-include') {
+  } else if(interaction.commandName === 'include-gamer') {
     const userId = interaction.options.get('user-id')?.value as string;
 
     if (!userId) {
@@ -217,32 +272,58 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
     try {
       await includeUserGuild(userId, guildId);
-      await interaction.reply('re-included');
+      await interaction.reply('gamer included');
     } catch (err: any) {
-      await interaction.reply('error while re-including');
+      await interaction.reply('error while including gamer');
     }
-  } else if(interaction.commandName === 'list-excluded') {
+  } else if(interaction.commandName === 'view-excluded-gamers') {
     try {
       const excludedUserGuild = await getAllExcludedUserGuild(guildId);
 
       await interaction.reply(formatExcludedUserGuild(excludedUserGuild));
     } catch (err: any) {
-      await interaction.reply('error while listing excluded');
+      await interaction.reply('error while viewing excluded gamers');
     }
-  } else if(interaction.commandName === 'get-most-n-active-user') {
-    const n = interaction.options.get('n')?.value as number;
+  } else if (interaction.commandName === 'exclude-channel') {
+    const channelId = interaction.options.get('channel-id')?.value as string;
 
-    if(!n) {
+    if (!channelId) {
       return;
     }
 
-    const mostActiveUsers = await getNMostActiveUsers(n, guildId)
+    try {
+      await excludeChannelGuild(channelId, guildId);
+      await interaction.reply('channel excluded');
+    } catch (err: any) {
+      await interaction.reply('error while excluding channel');
+    }
+  } else if(interaction.commandName === 'include-channel') {
+    const channelId = interaction.options.get('channel-id')?.value as string;
+
+    if (!channelId) {
+      return;
+    }
 
     try {
-      await interaction.reply(formatMostActiveUsers(mostActiveUsers));
+      await includeChannelGuild(channelId, guildId);
+      await interaction.reply('channel included');
     } catch (err: any) {
-      await interaction.reply('error while re-including');
+      await interaction.reply('error while including channel');
     }
+  } else if(interaction.commandName === 'view-excluded-channels') {
+    try {
+      const excludedChannelGuild = await getAllExcludedChannelGuild(guildId);
+
+      await interaction.reply(formatExcludedChannelGuild(excludedChannelGuild));
+    } catch (err: any) {
+      await interaction.reply('error while viewing excluded channels');
+    }
+  } else if(interaction.commandName === 'toggle-adapter-status') {
+    adapterIsRunning != adapterIsRunning;
+    await interaction.reply(`adapter mode changed to ${adapterIsRunning ? 'running' : 'paused'}`);
+  } else if(interaction.commandName === 'view-adapter-status') {
+    adapterIsRunning != adapterIsRunning;
+    await interaction.reply(`adapter is currently ${adapterIsRunning ? 'running' : 'paused'}`);
   }
 });
 
@@ -259,15 +340,15 @@ function formatExcludedUserGuild(excludedUserGuild: ExcludedUserGuildEntry[]) {
   return result;
 }
 
-function formatMostActiveUsers(mostActiveUsers: UserGuildActivityEntry[]) {
-  if (!mostActiveUsers || mostActiveUsers.length === 0) {
+function formatExcludedChannelGuild(excludedChannelGuild: ExcludedChannelGuildEntry[]) {
+  if (!excludedChannelGuild || excludedChannelGuild.length === 0) {
     return "no results";
   }
 
-  let result = "userId - activityScore\n";
+  let result = "channelId - date\n";
 
-  for (const activeUsers of mostActiveUsers) {
-    result += activeUsers.userId + ' - ' + activeUsers.activityScore + '\n';
+  for (const exclChannelGuild of excludedChannelGuild) {
+    result += exclChannelGuild.channelId + ' - ' + exclChannelGuild.date + '\n';
   }
   return result;
 }
