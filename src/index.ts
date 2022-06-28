@@ -133,7 +133,7 @@ const rest = new REST({version: '9'}).setToken(process.env.DISCORD_BOT_TOKEN!);
 
 rest.put(Routes.applicationCommands(process.env.DISCORD_CLIENT_ID!), { body: commands }).catch(console.error);
 
-const adapterIsRunning = true;
+let adapterIsRunning = true;
 
 /* Setup client */
 
@@ -353,11 +353,11 @@ client.on('interactionCreate', async (interaction: Interaction) => {
       await interaction.reply('error while viewing excluded channels');
     }
   } else if(interaction.commandName === TOGGLE_ADAPTER_STATUS_COMMAND) {
-    adapterIsRunning != adapterIsRunning;
+    adapterIsRunning = !adapterIsRunning;
     await interaction.reply(`adapter mode changed to ${adapterIsRunning ? 'running' : 'paused'}`);
 
   } else if(interaction.commandName === VIEW_ADAPTER_STATUS_COMMAND) {
-    adapterIsRunning != adapterIsRunning;
+    adapterIsRunning = !adapterIsRunning;
     await interaction.reply(`adapter is currently ${adapterIsRunning ? 'running' : 'paused'}`);
 
   } else if(interaction.commandName === REGISTER_FOR_GAMER_PASSPORT_COMMAND) {
