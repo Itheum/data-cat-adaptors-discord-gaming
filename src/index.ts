@@ -50,7 +50,10 @@ import {
   VIEW_EXCLUDED_GAMERS_COMMAND,
   SET_REGISTER_FOR_GAMER_PASSPORT_LINK_COMMAND,
   SET_CONNECT_ELROND_WALLET_LINK_COMMAND,
-  SET_MY_PORTAL_LINK_COMMAND
+  SET_MY_PORTAL_LINK_COMMAND,
+  VIEW_REGISTER_FOR_GAMER_PASSPORT_LINK_COMMAND,
+  VIEW_CONNECT_ELROND_WALLET_LINK_COMMAND,
+  VIEW_MY_PORTAL_LINK_COMMAND
 } from "./constants";
 
 dotenv.config();
@@ -120,7 +123,7 @@ const commands = [
     .setDefaultPermission(true))
     .toJSON(),
 
-  // set guild config links
+  // set and view guild config links
   (new SlashCommandBuilder()
     .setName(SET_REGISTER_FOR_GAMER_PASSPORT_LINK_COMMAND)
     .setDescription('Sets the link for registering for gamer passport')
@@ -146,6 +149,21 @@ const commands = [
       option.setName('link')
         .setDescription('The link that should be returned to the gamer')
         .setRequired(true))
+    .setDefaultPermission(true))
+    .toJSON(),
+  (new SlashCommandBuilder()
+    .setName(VIEW_REGISTER_FOR_GAMER_PASSPORT_LINK_COMMAND)
+    .setDescription('Views the link for registering for gamer passport')
+    .setDefaultPermission(true))
+    .toJSON(),
+  (new SlashCommandBuilder()
+    .setName(VIEW_CONNECT_ELROND_WALLET_LINK_COMMAND)
+    .setDescription('Views the link for connecting an elrond wallet')
+    .setDefaultPermission(true))
+    .toJSON(),
+  (new SlashCommandBuilder()
+    .setName(VIEW_MY_PORTAL_LINK_COMMAND)
+    .setDescription('Views the link for the gamers portal')
     .setDefaultPermission(true))
     .toJSON(),
 
@@ -440,6 +458,27 @@ client.on('interactionCreate', async (interaction: Interaction) => {
       await interaction.reply('link set included');
     } catch (err: any) {
       await interaction.reply('error while setting link');
+    }
+  } else if(interaction.commandName === VIEW_REGISTER_FOR_GAMER_PASSPORT_LINK_COMMAND) {
+    try {
+      const guildConfig = await getGuildConfig(guildId);
+      await interaction.reply(guildConfig.links.registerForGamerPassport);
+    } catch (err: any) {
+      await interaction.reply('N/A');
+    }
+  } else if(interaction.commandName === VIEW_MY_PORTAL_LINK_COMMAND) {
+    try {
+      const guildConfig = await getGuildConfig(guildId);
+      await interaction.reply(guildConfig.links.myPortal);
+    } catch (err: any) {
+      await interaction.reply('N/A');
+    }
+  } else if(interaction.commandName === VIEW_CONNECT_ELROND_WALLET_LINK_COMMAND) {
+    try {
+      const guildConfig = await getGuildConfig(guildId);
+      await interaction.reply(guildConfig.links.connectElrondWallet);
+    } catch (err: any) {
+      await interaction.reply('N/A');
     }
   }
 });
