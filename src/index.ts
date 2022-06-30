@@ -357,7 +357,6 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     await interaction.reply(`adapter mode changed to ${adapterIsRunning ? 'running' : 'paused'}`);
 
   } else if(interaction.commandName === VIEW_ADAPTER_STATUS_COMMAND) {
-    adapterIsRunning = !adapterIsRunning;
     await interaction.reply(`adapter is currently ${adapterIsRunning ? 'running' : 'paused'}`);
 
   } else if(interaction.commandName === REGISTER_FOR_GAMER_PASSPORT_COMMAND) {
