@@ -1,8 +1,6 @@
 // Roles
-export const OWNER_ROLE = 'Owner';
-export const DATA_AUDITORS_ROLE = 'Data Auditors';
-export const GAMER_PASSPORT_ROLE = 'Gamer Passport';
-export const ADMIN_ROLES = [OWNER_ROLE, DATA_AUDITORS_ROLE];
+export const GAMER_PASSPORT_PLAYER_ROLE = 'Gamer Passport';
+export const GAMER_PASSPORT_ADMIN_ROLE = 'Gamer Passport Admin';
 
 // Commands
 export const EXCLUDE_GAMER_COMMAND = 'exclude-gamer';

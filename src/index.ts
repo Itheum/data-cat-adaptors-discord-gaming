@@ -31,10 +31,12 @@ import {
 } from "./aws-dynamodb-connector";
 import {
   ADMIN_COMMANDS,
-  ADMIN_ROLES,
+  GAMER_PASSPORT_PLAYER_ROLE,
+  GAMER_PASSPORT_ADMIN_ROLE,
   CONNECT_ELROND_WALLET_COMMAND,
   EXCLUDE_CHANNEL_COMMAND,
-  EXCLUDE_GAMER_COMMAND, GAMER_PASSPORT_COMMANDS, GAMER_PASSPORT_ROLE,
+  EXCLUDE_GAMER_COMMAND,
+  GAMER_PASSPORT_COMMANDS,
   INCLUDE_CHANNEL_COMMAND,
   INCLUDE_GAMER_COMMAND, MY_PORTAL_COMMAND,
   REGISTER_FOR_GAMER_PASSPORT_COMMAND,
@@ -147,89 +149,75 @@ client.on("ready", () => {
 });
 
 client.on("voiceStateUpdate", async (oldState, newState) => {
-  if (!adapterIsRunning) {
-    return;
-  }
-
-  if (guildOrGuildMemberHasGamerPassportRole(newState.guild!) && !guildOrGuildMemberHasGamerPassportRole(newState.member!)) {
-    return;
-  }
-
   const userId = newState.id;
   const guildId = newState.guild.id;
   const channelId = newState.channel!.id
 
-  try {
-    await getExcludedUserGuild(userId, guildId);
-    await getExcludedChannelGuild(channelId, guildId);
+  if (!(await preconditionsFulfilled(newState.guild!, newState.member!, userId, channelId, guildId))) {
     return;
-  } catch (err: any) {
-    // user and channel are not excluded, continue
   }
 
   if (!oldState.streaming && newState.streaming) {
+    console.log("user is starting a screencast");
     startAudioVideoSession(userId, guildId, 'screencast');
-  }
-  if (oldState.streaming && !newState.streaming) {
+
+  } else if (oldState.streaming && !newState.streaming) {
+    console.log("user is ending a screencast");
     endAudioVideoSession(userId, guildId, 'screencast');
   }
 
   if (!oldState.selfVideo && newState.selfVideo) {
+    console.log("user is starting a webcam");
     startAudioVideoSession(userId, guildId, 'video');
-  }
-  if (oldState.selfVideo && !newState.selfVideo) {
+
+  } else if (oldState.selfVideo && !newState.selfVideo) {
+    console.log("user is ending a webcam");
     endAudioVideoSession(userId, guildId, 'video');
   }
 
   if (oldState.selfMute && !newState.selfMute) {
+    console.log("user is starting a microphone");
     startAudioVideoSession(userId, guildId, 'microphone');
-  }
-  if (!oldState.selfMute && newState.selfMute) {
+
+  } else if (!oldState.selfMute && newState.selfMute) {
+    console.log("user is ending a microphone");
     endAudioVideoSession(userId, guildId, 'microphone');
   }
 
   if (!oldState.channel && newState.channel) {
+    console.log("user is joining a voice channel");
     startAudioVideoSession(userId, guildId, 'voiceChannel');
 
     if (!newState.selfMute) {
+      console.log("with a microphone");
       startAudioVideoSession(userId, guildId, 'microphone');
     }
-  }
-  if (oldState.channel && !newState.channel) {
+  } else if (oldState.channel && !newState.channel) {
+    console.log("user is leaving a voice channel");
     endAudioVideoSession(userId, guildId, 'voiceChannel');
 
     if (!oldState.selfMute) {
+      console.log("with a microphone");
       endAudioVideoSession(userId, guildId, 'microphone');
     }
   }
 });
 
 client.on("messageCreate", async (msg: Message) => {
-  if (!adapterIsRunning) {
-    return;
-  }
-
-  if (guildOrGuildMemberHasGamerPassportRole(msg.guild!) && !guildOrGuildMemberHasGamerPassportRole(msg.member!)) {
-    return;
-  }
-
   const userId = msg.author.id;
   const channelId = msg.channel.id;
   const guildId = (msg.channel as TextChannel).guild.id;
+
+  if (!(await preconditionsFulfilled(msg.guild!, msg.member!, userId, channelId, guildId))) {
+    return;
+  }
+
   const isReply = msg.mentions.users.size !== 0;
 
   let mentionedUsers = [] as string[];
 
   if (isReply) {
     mentionedUsers = msg.mentions.users.map(ele => ele.id);
-  }
-
-  try {
-    await getExcludedUserGuild(userId, guildId);
-    await getExcludedChannelGuild(channelId, guildId);
-    return;
-  } catch (err: any) {
-    // user and channel are not excluded, continue
   }
 
   const messageIncrement = isReply ? 0 : 1;
@@ -240,26 +228,13 @@ client.on("messageCreate", async (msg: Message) => {
 });
 
 client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser) => {
-  if (!adapterIsRunning) {
-    return;
-  }
-
-  const guildMember = reaction.message.guild!.members.cache.toJSON().find(member => member.user.id === user.id);
-
-  if (guildOrGuildMemberHasGamerPassportRole(reaction.message.guild!) && !guildOrGuildMemberHasGamerPassportRole(guildMember!)) {
-    return;
-  }
-
   const userId = user.id;
   const channelId = reaction.message.channel.id;
   const guildId = (reaction.message.channel as TextChannel)!.guild.id;
+  const guildMember = reaction.message.guild!.members.cache.toJSON().find(member => member.user.id === userId);
 
-  try {
-    await getExcludedUserGuild(userId, guildId);
-    await getExcludedChannelGuild(channelId, guildId);
+  if (!(await preconditionsFulfilled(reaction.message.guild!, guildMember!, userId, channelId, guildId))) {
     return;
-  } catch (err: any) {
-    // user and channel are not excluded, continue
   }
 
   updateUserGuildActivities(userId, guildId , 0, 0, 1, 0, 0);
@@ -267,17 +242,20 @@ client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessag
 
 client.on('interactionCreate', async (interaction: Interaction) => {
   if (!interaction.isCommand()) {
+    console.log("interaction is no command");
     return;
   }
 
   if (ADMIN_COMMANDS.includes(interaction.commandName)) {
-    if (!guildMemberHasAdminRole(interaction!.member! as GuildMember)) {
-      await interaction.reply(`only ${ADMIN_ROLES.toString()} are allowed to perform this command`);
+    if (!guildMemberHasGamerPassportAdminRole(interaction!.member! as GuildMember)) {
+      console.log("user is not allowed to perform command");
+      await interaction.reply(`only ${GAMER_PASSPORT_ADMIN_ROLE} are allowed to perform this command`);
       return;
     }
   } else if (GAMER_PASSPORT_COMMANDS.includes(interaction.commandName)) {
-    if (!guildOrGuildMemberHasGamerPassportRole(interaction!.member! as GuildMember)) {
-      await interaction.reply(`only ${GAMER_PASSPORT_ROLE} is allowed to perform this command`);
+    if (!guildOrGuildMemberHasGamerPassportPlayerRole(interaction!.member! as GuildMember)) {
+      console.log("user is not allowed to perform command");
+      await interaction.reply(`only ${GAMER_PASSPORT_PLAYER_ROLE} is allowed to perform this command`);
       return;
     }
   }
@@ -288,6 +266,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     const userId = interaction.options.get('user-id')?.value as string;
 
     if (!userId) {
+      console.log("user id is needed for excluding a user");
       return;
     }
 
@@ -301,6 +280,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     const userId = interaction.options.get('user-id')?.value as string;
 
     if (!userId) {
+      console.log("user id is needed for including a user");
       return;
     }
 
@@ -322,6 +302,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     const channelId = interaction.options.get('channel-id')?.value as string;
 
     if (!channelId) {
+      console.log("channel id is needed for excluding a channel");
       return;
     }
 
@@ -335,6 +316,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     const channelId = interaction.options.get('channel-id')?.value as string;
 
     if (!channelId) {
+      console.log("channel id is needed for including a channel");
       return;
     }
 
@@ -354,6 +336,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     }
   } else if(interaction.commandName === TOGGLE_ADAPTER_STATUS_COMMAND) {
     adapterIsRunning = !adapterIsRunning;
+    console.log(`adapter set to ${adapterIsRunning ? 'running' : 'paused'}`);
     await interaction.reply(`adapter mode changed to ${adapterIsRunning ? 'running' : 'paused'}`);
 
   } else if(interaction.commandName === VIEW_ADAPTER_STATUS_COMMAND) {
@@ -370,7 +353,37 @@ client.on('interactionCreate', async (interaction: Interaction) => {
   }
 });
 
-function formatExcludedUserGuild(excludedUserGuild: ExcludedUserGuildEntry[]) {
+async function preconditionsFulfilled(guild: Guild, member: GuildMember, userId: string, channelId: string, guildId: string): Promise<boolean> {
+  if (!adapterIsRunning) {
+    console.log("adapter is not running");
+    return false;
+  }
+
+  if (guildOrGuildMemberHasGamerPassportPlayerRole(guild) && !guildOrGuildMemberHasGamerPassportPlayerRole(member)) {
+    console.log(`guild has ${GAMER_PASSPORT_PLAYER_ROLE} but user hasn't`);
+    return false;
+  }
+
+  try {
+    await getExcludedUserGuild(userId, guildId);
+    console.log("user is excluded");
+    return false;
+  } catch (err: any) {
+    // user is not excluded, continue
+  }
+
+  try {
+    await getExcludedChannelGuild(channelId, guildId);
+    console.log("channel is excluded");
+    return false;
+  } catch (err: any) {
+    // channel is not excluded, continue
+  }
+
+  return true;
+}
+
+function formatExcludedUserGuild(excludedUserGuild: ExcludedUserGuildEntry[]): string {
   if (!excludedUserGuild || excludedUserGuild.length === 0) {
     return "no results";
   }
@@ -383,7 +396,7 @@ function formatExcludedUserGuild(excludedUserGuild: ExcludedUserGuildEntry[]) {
   return result;
 }
 
-function formatExcludedChannelGuild(excludedChannelGuild: ExcludedChannelGuildEntry[]) {
+function formatExcludedChannelGuild(excludedChannelGuild: ExcludedChannelGuildEntry[]): string {
   if (!excludedChannelGuild || excludedChannelGuild.length === 0) {
     return "no results";
   }
@@ -400,12 +413,12 @@ function getGuildOrGuildMemberRoleNames(guildOrGuildMember: Guild | GuildMember)
   return guildOrGuildMember.roles.cache.toJSON().map(role => role.name);
 }
 
-function guildOrGuildMemberHasGamerPassportRole(guildOrGuildMember: Guild | GuildMember): boolean {
-  return getGuildOrGuildMemberRoleNames(guildOrGuildMember).includes(GAMER_PASSPORT_ROLE);
+function guildOrGuildMemberHasGamerPassportPlayerRole(guildOrGuildMember: Guild | GuildMember): boolean {
+  return getGuildOrGuildMemberRoleNames(guildOrGuildMember).includes(GAMER_PASSPORT_PLAYER_ROLE);
 }
 
-function guildMemberHasAdminRole(guildMember: GuildMember): boolean {
-  return getGuildOrGuildMemberRoleNames(guildMember).some(role => ADMIN_ROLES.includes(role));
+function guildMemberHasGamerPassportAdminRole(guildMember: GuildMember): boolean {
+  return getGuildOrGuildMemberRoleNames(guildMember).includes(GAMER_PASSPORT_ADMIN_ROLE);
 }
 
 client.login(process.env.DISCORD_BOT_TOKEN).catch(console.error);

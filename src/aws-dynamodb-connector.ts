@@ -38,6 +38,7 @@ export async function getAllExcludedUserGuild(guildId: string): Promise<Excluded
     if (existingEntry && existingEntry.Items) {
       return existingEntry.Items as ExcludedUserGuildEntry[];
     }
+    console.log(`no user excluded from guild ${guildId}`);
     return [];
   } catch(err: any) {
     console.error(`error while scanning all entries for guildId ${guildId} in table ${process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME}`, err);
@@ -65,6 +66,7 @@ export async function getExcludedUserGuild(userId: string, guildId: string): Pro
     console.error(`error while scanning for userId ${userId} and guildId ${guildId} in table ${process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME}`, err);
     throw err;
   }
+  console.log(`no entry found for userId ${userId} and guildId ${guildId}`);
   throw new Error(`no entry found for userId ${userId} and guildId ${guildId}`);
 }
 
@@ -128,6 +130,7 @@ export async function getAllExcludedChannelGuild(guildId: string): Promise<Exclu
     if (existingEntry && existingEntry.Items) {
       return existingEntry.Items as ExcludedChannelGuildEntry[];
     }
+    console.log(`no channel excluded from guild ${guildId}`);
     return [];
   } catch(err: any) {
     console.error(`error while scanning all entries for guildId ${guildId} in table ${process.env.AWS_DYNAMODB_EXCLUDED_CHANNEL_TABLE_NAME}`, err);
@@ -155,6 +158,7 @@ export async function getExcludedChannelGuild(channelId: string, guildId: string
     console.error(`error while scanning for channelId ${channelId} and guildId ${guildId} in table ${process.env.AWS_DYNAMODB_EXCLUDED_CHANNEL_TABLE_NAME}`, err);
     throw err;
   }
+  console.log(`no entry found for channelId ${channelId} and guildId ${guildId}`);
   throw new Error(`no entry found for channelId ${channelId} and guildId ${guildId}`);
 }
 
