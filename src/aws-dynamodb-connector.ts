@@ -5,7 +5,7 @@ import {
   ExcludedUserGuildEntry,
   UserGuildActivityEntry,
   MessageLengthCounts,
-  FrequencyCounts, ExcludedChannelGuildEntry,
+  FrequencyCounts, ExcludedChannelGuildEntry, GuildConfigEntry,
 } from "./dynamodb-interfaces";
 
 const ONE_MINUTE_IN_S = 60;
@@ -33,6 +33,10 @@ export async function getAllExcludedUserGuild(guildId: string): Promise<Excluded
   try {
     const existingEntry = await dynamoDbSingleton.scan({
       TableName: process.env.AWS_DYNAMODB_EXCLUDED_USER_TABLE_NAME!,
+      FilterExpression: 'guildId = :guildId',
+      ExpressionAttributeValues: {
+        ':guildId': guildId,
+      }
     }).promise();
 
     if (existingEntry && existingEntry.Items) {
@@ -55,7 +59,7 @@ export async function getExcludedUserGuild(userId: string, guildId: string): Pro
       FilterExpression: 'userId = :userId and guildId = :guildId',
       ExpressionAttributeValues: {
         ':userId': userId,
-        ':guildId': guildId
+        ':guildId': guildId,
       }
     }).promise();
 
@@ -125,6 +129,10 @@ export async function getAllExcludedChannelGuild(guildId: string): Promise<Exclu
   try {
     const existingEntry = await dynamoDbSingleton.scan({
       TableName: process.env.AWS_DYNAMODB_EXCLUDED_CHANNEL_TABLE_NAME!,
+      FilterExpression: 'guildId = :guildId',
+      ExpressionAttributeValues: {
+        ':guildId': guildId,
+      }
     }).promise();
 
     if (existingEntry && existingEntry.Items) {
@@ -569,6 +577,29 @@ export async function getExistingEntry (userId: string, guildId: string): Promis
     console.error(`error while scanning for userId ${userId} and guildId ${guildId} in table ${process.env.AWS_DYNAMODB_USER_ACTIVITIES_TABLE_NAME}`, err);
     throw err;
   }
+}
+
+export async function getGuildConfig(guildId: string): Promise<GuildConfigEntry> {
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  try {
+    const existingEntry = await dynamoDbSingleton.query({
+      TableName: process.env.AWS_DYNAMODB_GUILD_CONFIG_TABLE_NAME!,
+      KeyConditionExpression: 'guildId = :guildId',
+      ExpressionAttributeValues: {
+        ':guildId': guildId,
+      }
+    }).promise();
+
+    if (existingEntry && existingEntry.Count && existingEntry.Items && existingEntry.Count === 1) {
+      return existingEntry.Items[0] as GuildConfigEntry;
+    }
+  } catch(err: any) {
+    console.error(`error while scanning for guildId ${guildId} in table ${process.env.AWS_DYNAMODB_GUILD_CONFIG_TABLE_NAME}`, err);
+    throw err;
+  }
+  console.log(`no entry found for guildId ${guildId}`);
+  throw new Error(`no entry found for guildId ${guildId}`);
 }
 
 export function calculateActivityScore (

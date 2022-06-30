@@ -27,7 +27,7 @@ import {
   endAudioVideoSession,
   excludeChannelGuild,
   includeChannelGuild,
-  getAllExcludedChannelGuild, getExcludedChannelGuild,
+  getAllExcludedChannelGuild, getExcludedChannelGuild, getGuildConfig,
 } from "./aws-dynamodb-connector";
 import {
   ADMIN_COMMANDS,
@@ -343,13 +343,26 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     await interaction.reply(`adapter is currently ${adapterIsRunning ? 'running' : 'paused'}`);
 
   } else if(interaction.commandName === REGISTER_FOR_GAMER_PASSPORT_COMMAND) {
-    await interaction.reply(`head over to https://itheum.com/gamerpassport`);
-
+    try {
+      const guildConfig = await getGuildConfig(guildId);
+      await interaction.reply(`head over to ${guildConfig.links.registerForGamerPassport}`);
+    } catch (e) {
+      await interaction.reply('N/A');
+    }
   } else if(interaction.commandName === MY_PORTAL_COMMAND) {
-    await interaction.reply(`head over to https://itheum.com/gamerpassport`);
-
+    try {
+      const guildConfig = await getGuildConfig(guildId);
+      await interaction.reply(`head over to ${guildConfig.links.myPortal}`);
+    } catch (e) {
+      await interaction.reply('N/A');
+    }
   } else if(interaction.commandName === CONNECT_ELROND_WALLET_COMMAND) {
-    await interaction.reply(`head over to https://itheum.com/gamerpassport`);
+    try {
+      const guildConfig = await getGuildConfig(guildId);
+      await interaction.reply(`head over to ${guildConfig.links.connectElrondWallet}`);
+    } catch (e) {
+      await interaction.reply('N/A');
+    }
   }
 });
 

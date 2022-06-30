@@ -51,3 +51,13 @@ export interface ExcludedChannelGuildEntry {
   guildId: string;
   date: string;
 }
+
+export interface GuildConfigEntry {
+  guildId: string;
+  links: {
+    mintNfmeIdGamerPassport: string,
+    connectElrondWallet: string,
+    registerForGamerPassport: string,
+    myPortal: string,
+  };
+}
