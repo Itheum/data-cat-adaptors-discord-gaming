@@ -602,6 +602,45 @@ export async function getGuildConfig(guildId: string): Promise<GuildConfigEntry>
   throw new Error(`no entry found for guildId ${guildId}`);
 }
 
+export async function setGuildConfigLink(guildId: string, link: string, linkType: 'my-portal' | 'connect-elrond-wallet' | 'register-for-gamer-passport'): Promise<void> {
+  const dynamoDbSingleton = getDynamoDbSingleton();
+
+  let guildConfig;
+  
+  try {
+    guildConfig = await getGuildConfig(guildId);
+  } catch (err: any) {
+    guildConfig = {
+      guildId,
+      links: {
+        myPortal: '',
+        connectElrondWallet: '',
+        registerForGamerPassport: '',
+        mintNfmeIdGamerPassport: '',
+      },
+    } as GuildConfigEntry;
+  }
+
+  if (linkType === 'my-portal') {
+    guildConfig.links.myPortal = link;
+  } else if (linkType === 'connect-elrond-wallet') {
+    guildConfig.links.connectElrondWallet = link;
+  } else if (linkType === 'register-for-gamer-passport') {
+    guildConfig.links.registerForGamerPassport = link;
+  }
+
+  try {
+    await dynamoDbSingleton.put({
+      TableName: process.env.AWS_DYNAMODB_GUILD_CONFIG_TABLE_NAME!,
+      Item: guildConfig,
+    }).promise();
+    console.log(`store guild config for guildId=${guildId}`);
+  } catch(err: any)  {
+    console.error(`error while storing guild config for guildId ${guildId}`, err);
+    throw err;
+  }
+}
+
 export function calculateActivityScore (
   messageCount: number,
   replyCount: number,

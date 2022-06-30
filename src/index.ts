@@ -27,7 +27,10 @@ import {
   endAudioVideoSession,
   excludeChannelGuild,
   includeChannelGuild,
-  getAllExcludedChannelGuild, getExcludedChannelGuild, getGuildConfig,
+  getAllExcludedChannelGuild,
+  getExcludedChannelGuild,
+  getGuildConfig,
+  setGuildConfigLink,
 } from "./aws-dynamodb-connector";
 import {
   ADMIN_COMMANDS,
@@ -38,12 +41,16 @@ import {
   EXCLUDE_GAMER_COMMAND,
   GAMER_PASSPORT_COMMANDS,
   INCLUDE_CHANNEL_COMMAND,
-  INCLUDE_GAMER_COMMAND, MY_PORTAL_COMMAND,
+  INCLUDE_GAMER_COMMAND,
+  MY_PORTAL_COMMAND,
   REGISTER_FOR_GAMER_PASSPORT_COMMAND,
   TOGGLE_ADAPTER_STATUS_COMMAND,
   VIEW_ADAPTER_STATUS_COMMAND,
   VIEW_EXCLUDED_CHANNELS_COMMAND,
-  VIEW_EXCLUDED_GAMERS_COMMAND
+  VIEW_EXCLUDED_GAMERS_COMMAND,
+  SET_REGISTER_FOR_GAMER_PASSPORT_LINK_COMMAND,
+  SET_CONNECT_ELROND_WALLET_LINK_COMMAND,
+  SET_MY_PORTAL_LINK_COMMAND
 } from "./constants";
 
 dotenv.config();
@@ -110,6 +117,35 @@ const commands = [
   (new SlashCommandBuilder()
     .setName(VIEW_ADAPTER_STATUS_COMMAND)
     .setDescription('Views the adapter status (running/paused)')
+    .setDefaultPermission(true))
+    .toJSON(),
+
+  // set guild config links
+  (new SlashCommandBuilder()
+    .setName(SET_REGISTER_FOR_GAMER_PASSPORT_LINK_COMMAND)
+    .setDescription('Sets the link for registering for gamer passport')
+    .addStringOption(option =>
+      option.setName('link')
+        .setDescription('The link that should be returned to the gamer')
+        .setRequired(true))
+    .setDefaultPermission(true))
+    .toJSON(),
+  (new SlashCommandBuilder()
+    .setName(SET_CONNECT_ELROND_WALLET_LINK_COMMAND)
+    .setDescription('Sets the link for connecting an elrond wallet')
+    .addStringOption(option =>
+      option.setName('link')
+        .setDescription('The link that should be returned to the gamer')
+        .setRequired(true))
+    .setDefaultPermission(true))
+    .toJSON(),
+  (new SlashCommandBuilder()
+    .setName(SET_MY_PORTAL_LINK_COMMAND)
+    .setDescription('Sets the link for the gamers portal')
+    .addStringOption(option =>
+      option.setName('link')
+        .setDescription('The link that should be returned to the gamer')
+        .setRequired(true))
     .setDefaultPermission(true))
     .toJSON(),
 
@@ -346,22 +382,64 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     try {
       const guildConfig = await getGuildConfig(guildId);
       await interaction.reply(`head over to ${guildConfig.links.registerForGamerPassport}`);
-    } catch (e) {
+    } catch (err: any) {
       await interaction.reply('N/A');
     }
   } else if(interaction.commandName === MY_PORTAL_COMMAND) {
     try {
       const guildConfig = await getGuildConfig(guildId);
       await interaction.reply(`head over to ${guildConfig.links.myPortal}`);
-    } catch (e) {
+    } catch (err: any) {
       await interaction.reply('N/A');
     }
   } else if(interaction.commandName === CONNECT_ELROND_WALLET_COMMAND) {
     try {
       const guildConfig = await getGuildConfig(guildId);
       await interaction.reply(`head over to ${guildConfig.links.connectElrondWallet}`);
-    } catch (e) {
+    } catch (err: any) {
       await interaction.reply('N/A');
+    }
+  } else if(interaction.commandName === SET_MY_PORTAL_LINK_COMMAND) {
+    const link = interaction.options.get('link')?.value as string;
+
+    if (!link) {
+      console.log("link is needed for setting it");
+      return;
+    }
+
+    try {
+      await setGuildConfigLink(guildId, link, 'my-portal');
+      await interaction.reply('link set included');
+    } catch (err: any) {
+      await interaction.reply('error while setting link');
+    }
+  } else if(interaction.commandName === SET_CONNECT_ELROND_WALLET_LINK_COMMAND) {
+    const link = interaction.options.get('link')?.value as string;
+
+    if (!link) {
+      console.log("link is needed for setting it");
+      return;
+    }
+
+    try {
+      await setGuildConfigLink(guildId, link, 'connect-elrond-wallet');
+      await interaction.reply('link set included');
+    } catch (err: any) {
+      await interaction.reply('error while setting link');
+    }
+  } else if(interaction.commandName === SET_REGISTER_FOR_GAMER_PASSPORT_LINK_COMMAND) {
+    const link = interaction.options.get('link')?.value as string;
+
+    if (!link) {
+      console.log("link is needed for setting it");
+      return;
+    }
+
+    try {
+      await setGuildConfigLink(guildId, link, 'register-for-gamer-passport');
+      await interaction.reply('link set included');
+    } catch (err: any) {
+      await interaction.reply('error while setting link');
     }
   }
 });
