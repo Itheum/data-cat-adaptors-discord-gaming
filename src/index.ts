@@ -61,7 +61,7 @@ import {
 dotenv.config();
 
 Sentry.init({
-  dsn: "https://275e261875874864a10ff98509030917@o176671.ingest.sentry.io/6543206",
+  dsn: process.env.SENTRY_URL!,
   tracesSampleRate: 1.0,
 });
 
