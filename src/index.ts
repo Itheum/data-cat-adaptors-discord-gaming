@@ -1,4 +1,6 @@
 import dotenv from 'dotenv';
+import * as Sentry from "@sentry/node";
+import "@sentry/tracing";
 import { ExcludedChannelGuildEntry, ExcludedUserGuildEntry } from "./dynamodb-interfaces";
 import { REST } from "@discordjs/rest";
 import { SlashCommandBuilder } from "@discordjs/builders"
@@ -57,6 +59,11 @@ import {
 } from "./constants";
 
 dotenv.config();
+
+Sentry.init({
+  dsn: "https://275e261875874864a10ff98509030917@o176671.ingest.sentry.io/6543206",
+  tracesSampleRate: 1.0,
+});
 
 /* Register commands */
 
