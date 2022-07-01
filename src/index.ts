@@ -432,7 +432,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
     try {
       await setGuildConfigLink(guildId, link, 'my-portal');
-      await interaction.reply('link set included');
+      await interaction.reply('link set');
     } catch (err: any) {
       await interaction.reply('error while setting link');
     }
@@ -446,7 +446,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
     try {
       await setGuildConfigLink(guildId, link, 'connect-elrond-wallet');
-      await interaction.reply('link set included');
+      await interaction.reply('link set');
     } catch (err: any) {
       await interaction.reply('error while setting link');
     }
@@ -460,7 +460,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
     try {
       await setGuildConfigLink(guildId, link, 'register-for-gamer-passport');
-      await interaction.reply('link set included');
+      await interaction.reply('link set');
     } catch (err: any) {
       await interaction.reply('error while setting link');
     }
