@@ -1,5 +1,5 @@
 // Roles
-export const GAMER_PASSPORT_PLAYER_ROLE = 'Gamer Passport Gamer';
+export const GAMER_PASSPORT_PLAYER_ROLE = 'Gamer Passport Player';
 export const GAMER_PASSPORT_ADMIN_ROLE = 'Gamer Passport Admin';
 
 // Commands
