@@ -205,9 +205,9 @@ client.on("ready", () => {
 client.on("voiceStateUpdate", async (oldState, newState) => {
   const userId = newState.id;
   const guildId = newState.guild.id;
-  const channelId = newState.channel!.id
+  const channelId = newState.channel?.id
 
-  if (!(await preconditionsFulfilled(newState.guild!, newState.member!, userId, channelId, guildId))) {
+  if (!(await preconditionsFulfilled(newState.guild, newState.member, userId, channelId, guildId))) {
     return;
   }
 
@@ -262,7 +262,7 @@ client.on("messageCreate", async (msg: Message) => {
   const channelId = msg.channel.id;
   const guildId = (msg.channel as TextChannel).guild.id;
 
-  if (!(await preconditionsFulfilled(msg.guild!, msg.member!, userId, channelId, guildId))) {
+  if (!(await preconditionsFulfilled(msg.guild, msg.member, userId, channelId, guildId))) {
     return;
   }
 
@@ -284,10 +284,10 @@ client.on("messageCreate", async (msg: Message) => {
 client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser) => {
   const userId = user.id;
   const channelId = reaction.message.channel.id;
-  const guildId = (reaction.message.channel as TextChannel)!.guild.id;
-  const guildMember = reaction.message.guild!.members.cache.toJSON().find(member => member.user.id === userId);
+  const guildId = (reaction.message.channel as TextChannel).guild.id;
+  const guildMember = reaction.message.guild?.members.cache.toJSON().find(member => member.user.id === userId);
 
-  if (!(await preconditionsFulfilled(reaction.message.guild!, guildMember!, userId, channelId, guildId))) {
+  if (!(await preconditionsFulfilled(reaction.message.guild, guildMember, userId, channelId, guildId))) {
     return;
   }
 
@@ -301,20 +301,25 @@ client.on('interactionCreate', async (interaction: Interaction) => {
   }
 
   if (ADMIN_COMMANDS.includes(interaction.commandName)) {
-    if (!guildMemberHasGamerPassportAdminRole(interaction!.member! as GuildMember)) {
+    if (!guildMemberHasGamerPassportAdminRole(interaction.member as GuildMember | null)) {
       console.log("user is not allowed to perform command");
       await interaction.reply(`only ${GAMER_PASSPORT_ADMIN_ROLE} are allowed to perform this command`);
       return;
     }
   } else if (GAMER_PASSPORT_COMMANDS.includes(interaction.commandName)) {
-    if (!guildOrGuildMemberHasGamerPassportPlayerRole(interaction!.member! as GuildMember)) {
+    if (!guildOrGuildMemberHasGamerPassportPlayerRole(interaction.member as GuildMember | null)) {
       console.log("user is not allowed to perform command");
       await interaction.reply(`only ${GAMER_PASSPORT_PLAYER_ROLE} is allowed to perform this command`);
       return;
     }
   }
 
-  const guildId = interaction.guildId!;
+  const guildId = interaction.guildId;
+
+  if (!guildId) {
+    console.log("can't read guild id of interaction");
+    return;
+  }
 
   if (interaction.commandName === EXCLUDE_GAMER_COMMAND) {
     const userId = interaction.options.get('user-id')?.value as string;
@@ -483,7 +488,22 @@ client.on('interactionCreate', async (interaction: Interaction) => {
   }
 });
 
-async function preconditionsFulfilled(guild: Guild, member: GuildMember, userId: string, channelId: string, guildId: string): Promise<boolean> {
+async function preconditionsFulfilled(guild: Guild | null | undefined, member: GuildMember | null | undefined, userId: string, channelId: string | null | undefined, guildId: string): Promise<boolean> {
+  if (!guild) {
+    console.log("guild is null or undefined");
+    return false;
+  }
+
+  if (!member) {
+    console.log("member is null or undefined");
+    return false;
+  }
+
+  if (!channelId) {
+    console.log("channelId is null or undefined");
+    return false;
+  }
+
   if (!adapterIsRunning) {
     console.log("adapter is not running");
     return false;
@@ -540,14 +560,26 @@ function formatExcludedChannelGuild(excludedChannelGuild: ExcludedChannelGuildEn
 }
 
 function getGuildOrGuildMemberRoleNames(guildOrGuildMember: Guild | GuildMember): string[] {
+  if (!guildOrGuildMember.roles || !guildOrGuildMember.roles.cache) {
+    console.log('guildOrGuildMember has no roles');
+    return [];
+  }
   return guildOrGuildMember.roles.cache.toJSON().map(role => role.name);
 }
 
-function guildOrGuildMemberHasGamerPassportPlayerRole(guildOrGuildMember: Guild | GuildMember): boolean {
+function guildOrGuildMemberHasGamerPassportPlayerRole(guildOrGuildMember: Guild | GuildMember | null): boolean {
+  if (!guildOrGuildMember) {
+    console.log('guildOrGuildMember is null or undefined');
+    return false;
+  }
   return getGuildOrGuildMemberRoleNames(guildOrGuildMember).includes(GAMER_PASSPORT_PLAYER_ROLE);
 }
 
-function guildMemberHasGamerPassportAdminRole(guildMember: GuildMember): boolean {
+function guildMemberHasGamerPassportAdminRole(guildMember: GuildMember | null): boolean {
+  if (!guildMember) {
+    console.log('guildMember is null or undefined');
+    return false;
+  }
   return getGuildOrGuildMemberRoleNames(guildMember).includes(GAMER_PASSPORT_ADMIN_ROLE);
 }
 
