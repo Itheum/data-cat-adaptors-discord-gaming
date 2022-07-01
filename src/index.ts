@@ -310,7 +310,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
   if (ADMIN_COMMANDS.includes(interaction.commandName)) {
     if (!guildMemberHasGamerPassportAdminRole(interaction.member as GuildMember | null)) {
       console.log("user is not allowed to perform command");
-      await interaction.reply(`only ${GAMER_PASSPORT_ADMIN_ROLE} are allowed to perform this command`);
+      await interaction.reply(`only ${GAMER_PASSPORT_ADMIN_ROLE} is allowed to perform this command`);
       return;
     }
   } else if (GAMER_PASSPORT_COMMANDS.includes(interaction.commandName)) {
