@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import * as Sentry from "@sentry/node";
+import { CaptureConsole } from "@sentry/integrations";
 import "@sentry/tracing";
 import { ExcludedChannelGuildEntry, ExcludedUserGuildEntry } from "./dynamodb-interfaces";
 import { REST } from "@discordjs/rest";
@@ -62,6 +63,9 @@ dotenv.config();
 
 Sentry.init({
   dsn: process.env.SENTRY_URL!,
+  integrations: [new CaptureConsole({
+    levels: ["error"],
+  })],
   tracesSampleRate: 1.0,
 });
 
@@ -206,7 +210,7 @@ const client = new Client({
 });
 
 client.on("ready", () => {
-  console.log("Itheum bot is ready to go!");
+  console.info("Itheum bot is ready to go!");
 });
 
 client.on("voiceStateUpdate", async (oldState, newState) => {
@@ -219,46 +223,46 @@ client.on("voiceStateUpdate", async (oldState, newState) => {
   }
 
   if (!oldState.streaming && newState.streaming) {
-    console.log("user is starting a screencast");
+    console.info("user is starting a screencast");
     startAudioVideoSession(userId, guildId, 'screencast');
 
   } else if (oldState.streaming && !newState.streaming) {
-    console.log("user is ending a screencast");
+    console.info("user is ending a screencast");
     endAudioVideoSession(userId, guildId, 'screencast');
   }
 
   if (!oldState.selfVideo && newState.selfVideo) {
-    console.log("user is starting a webcam");
+    console.info("user is starting a webcam");
     startAudioVideoSession(userId, guildId, 'video');
 
   } else if (oldState.selfVideo && !newState.selfVideo) {
-    console.log("user is ending a webcam");
+    console.info("user is ending a webcam");
     endAudioVideoSession(userId, guildId, 'video');
   }
 
   if (oldState.selfMute && !newState.selfMute) {
-    console.log("user is starting a microphone");
+    console.info("user is starting a microphone");
     startAudioVideoSession(userId, guildId, 'microphone');
 
   } else if (!oldState.selfMute && newState.selfMute) {
-    console.log("user is ending a microphone");
+    console.info("user is ending a microphone");
     endAudioVideoSession(userId, guildId, 'microphone');
   }
 
   if (!oldState.channel && newState.channel) {
-    console.log("user is joining a voice channel");
+    console.info("user is joining a voice channel");
     startAudioVideoSession(userId, guildId, 'voiceChannel');
 
     if (!newState.selfMute) {
-      console.log("with a microphone");
+      console.info("with a microphone");
       startAudioVideoSession(userId, guildId, 'microphone');
     }
   } else if (oldState.channel && !newState.channel) {
-    console.log("user is leaving a voice channel");
+    console.info("user is leaving a voice channel");
     endAudioVideoSession(userId, guildId, 'voiceChannel');
 
     if (!oldState.selfMute) {
-      console.log("with a microphone");
+      console.info("with a microphone");
       endAudioVideoSession(userId, guildId, 'microphone');
     }
   }
@@ -303,19 +307,19 @@ client.on("messageReactionAdd", async (reaction: MessageReaction | PartialMessag
 
 client.on('interactionCreate', async (interaction: Interaction) => {
   if (!interaction.isCommand()) {
-    console.log("interaction is no command");
+    console.warn("interaction is no command");
     return;
   }
 
   if (ADMIN_COMMANDS.includes(interaction.commandName)) {
     if (!guildMemberHasGamerPassportAdminRole(interaction.member as GuildMember | null)) {
-      console.log("user is not allowed to perform command");
+      console.warn("user is not allowed to perform command");
       await interaction.reply(`only ${GAMER_PASSPORT_ADMIN_ROLE} is allowed to perform this command`);
       return;
     }
   } else if (GAMER_PASSPORT_COMMANDS.includes(interaction.commandName)) {
     if (!guildOrGuildMemberHasGamerPassportPlayerRole(interaction.member as GuildMember | null)) {
-      console.log("user is not allowed to perform command");
+      console.warn("user is not allowed to perform command");
       await interaction.reply(`only ${GAMER_PASSPORT_PLAYER_ROLE} is allowed to perform this command`);
       return;
     }
@@ -324,7 +328,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
   const guildId = interaction.guildId;
 
   if (!guildId) {
-    console.log("can't read guild id of interaction");
+    console.error("can't read guild id of interaction");
     return;
   }
 
@@ -332,7 +336,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     const userId = interaction.options.get('user-id')?.value as string;
 
     if (!userId) {
-      console.log("user id is needed for excluding a user");
+      console.warn("user id is needed for excluding a user");
       return;
     }
 
@@ -346,7 +350,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     const userId = interaction.options.get('user-id')?.value as string;
 
     if (!userId) {
-      console.log("user id is needed for including a user");
+      console.warn("user id is needed for including a user");
       return;
     }
 
@@ -368,7 +372,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     const channelId = interaction.options.get('channel-id')?.value as string;
 
     if (!channelId) {
-      console.log("channel id is needed for excluding a channel");
+      console.warn("channel id is needed for excluding a channel");
       return;
     }
 
@@ -382,7 +386,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     const channelId = interaction.options.get('channel-id')?.value as string;
 
     if (!channelId) {
-      console.log("channel id is needed for including a channel");
+      console.warn("channel id is needed for including a channel");
       return;
     }
 
@@ -402,7 +406,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     }
   } else if(interaction.commandName === TOGGLE_ADAPTER_STATUS_COMMAND) {
     adapterIsRunning = !adapterIsRunning;
-    console.log(`adapter set to ${adapterIsRunning ? 'running' : 'paused'}`);
+    console.info(`adapter set to ${adapterIsRunning ? 'running' : 'paused'}`);
     await interaction.reply(`adapter mode changed to ${adapterIsRunning ? 'running' : 'paused'}`);
 
   } else if(interaction.commandName === VIEW_ADAPTER_STATUS_COMMAND) {
@@ -433,7 +437,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     const link = interaction.options.get('link')?.value as string;
 
     if (!link) {
-      console.log("link is needed for setting it");
+      console.warn("link is needed for setting it");
       return;
     }
 
@@ -447,7 +451,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     const link = interaction.options.get('link')?.value as string;
 
     if (!link) {
-      console.log("link is needed for setting it");
+      console.warn("link is needed for setting it");
       return;
     }
 
@@ -461,7 +465,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     const link = interaction.options.get('link')?.value as string;
 
     if (!link) {
-      console.log("link is needed for setting it");
+      console.warn("link is needed for setting it");
       return;
     }
 
@@ -497,33 +501,33 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
 async function preconditionsFulfilled(guild: Guild | null | undefined, member: GuildMember | null | undefined, userId: string, channelId: string | null | undefined, guildId: string): Promise<boolean> {
   if (!guild) {
-    console.log("guild is null or undefined");
+    console.error("guild is null or undefined");
     return false;
   }
 
   if (!member) {
-    console.log("member is null or undefined");
+    console.error("member is null or undefined");
     return false;
   }
 
   if (!channelId) {
-    console.log("channelId is null or undefined");
+    console.error("channelId is null or undefined");
     return false;
   }
 
   if (!adapterIsRunning) {
-    console.log("adapter is not running");
+    console.warn("adapter is not running");
     return false;
   }
 
   if (guildOrGuildMemberHasGamerPassportPlayerRole(guild) && !guildOrGuildMemberHasGamerPassportPlayerRole(member)) {
-    console.log(`guild has ${GAMER_PASSPORT_PLAYER_ROLE} but user hasn't`);
+    console.info(`guild has ${GAMER_PASSPORT_PLAYER_ROLE} but user hasn't`);
     return false;
   }
 
   try {
     await getExcludedUserGuild(userId, guildId);
-    console.log("user is excluded");
+    console.info("user is excluded");
     return false;
   } catch (err: any) {
     // user is not excluded, continue
@@ -531,7 +535,7 @@ async function preconditionsFulfilled(guild: Guild | null | undefined, member: G
 
   try {
     await getExcludedChannelGuild(channelId, guildId);
-    console.log("channel is excluded");
+    console.info("channel is excluded");
     return false;
   } catch (err: any) {
     // channel is not excluded, continue
@@ -568,7 +572,7 @@ function formatExcludedChannelGuild(excludedChannelGuild: ExcludedChannelGuildEn
 
 function getGuildOrGuildMemberRoleNames(guildOrGuildMember: Guild | GuildMember): string[] {
   if (!guildOrGuildMember.roles || !guildOrGuildMember.roles.cache) {
-    console.log('guildOrGuildMember has no roles');
+    console.error('guildOrGuildMember has no roles');
     return [];
   }
   return guildOrGuildMember.roles.cache.toJSON().map(role => role.name);
@@ -576,7 +580,7 @@ function getGuildOrGuildMemberRoleNames(guildOrGuildMember: Guild | GuildMember)
 
 function guildOrGuildMemberHasGamerPassportPlayerRole(guildOrGuildMember: Guild | GuildMember | null): boolean {
   if (!guildOrGuildMember) {
-    console.log('guildOrGuildMember is null or undefined');
+    console.error('guildOrGuildMember is null or undefined');
     return false;
   }
   return getGuildOrGuildMemberRoleNames(guildOrGuildMember).includes(GAMER_PASSPORT_PLAYER_ROLE);
@@ -584,7 +588,7 @@ function guildOrGuildMemberHasGamerPassportPlayerRole(guildOrGuildMember: Guild 
 
 function guildMemberHasGamerPassportAdminRole(guildMember: GuildMember | null): boolean {
   if (!guildMember) {
-    console.log('guildMember is null or undefined');
+    console.error('guildMember is null or undefined');
     return false;
   }
   return getGuildOrGuildMemberRoleNames(guildMember).includes(GAMER_PASSPORT_ADMIN_ROLE);
